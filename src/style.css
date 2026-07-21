@@ -83,8 +83,6 @@ textarea:focus, input:focus { border-color: #6f9e8b; box-shadow: 0 0 0 3px #d8ee
 .recording-status strong, .recording-status small { display: block; }
 .recording-status strong { color: #3f4944; font-size: 11px; }
 .recording-status small { margin-top: 3px; color: #7d8580; font-size: 9px; }
-.or-divider { display: flex; align-items: center; gap: 8px; margin: 9px 0; color: #999d98; font-size: 8px; text-transform: uppercase; letter-spacing: .5px; }
-.or-divider::before, .or-divider::after { content: ""; flex: 1; height: 1px; background: #d9dad4; }
 .answers-heading > span { color: #999d98; font-size: 9px; margin-bottom: 8px; }
 .choices { display: grid; gap: 8px; }
 .choice-row { display: grid; grid-template-columns: 28px 1fr 25px; align-items: center; min-height: 43px; padding: 0 7px 0 12px; border: 1px solid #d7d8d2; border-radius: 4px; background: white; }

@@ -227,24 +227,22 @@ function renderMediaField(question: Question) {
     return;
   }
   if (question.mediaType === "audio") {
-    const recordingUrl = audioObjectUrls.get(question.id) || question.mediaUrl;
+    const recordingUrl = audioObjectUrls.get(question.id);
     field.innerHTML = `
       <div class="audio-recorder">
         <button id="recordButton" class="record-button"><i></i><span>${recordingUrl ? "Record again" : "Start recording"}</span></button>
         <div class="recording-status"><strong>${recordingUrl ? "Recording ready" : "Use your microphone"}</strong><small>${recordingUrl ? "It will be embedded in the downloaded test." : "You can listen before downloading."}</small></div>
         ${recordingUrl ? `<audio controls src="${escapeAttribute(recordingUrl)}"></audio>` : ""}
-      </div>
-      <div class="or-divider"><span>or use an existing shared audio link</span></div>
-      <div class="media-input"><span>◖</span><div><small>Shared audio address</small><input id="mediaUrl" value="${escapeAttribute(question.mediaUrl)}" placeholder="Paste a link here" /></div><b>${question.mediaUrl ? "✓" : "+"}</b></div>`;
+      </div>`;
     $("#recordButton").addEventListener("click", () => toggleRecording(question));
   } else {
     field.innerHTML = `<div class="media-input"><span>▧</span><div><small>Public image address</small><input id="mediaUrl" value="${escapeAttribute(question.mediaUrl)}" placeholder="Paste a link here" /></div><b>${question.mediaUrl ? "✓" : "+"}</b></div>`;
+    $("#mediaUrl").addEventListener("input", (event) => {
+      question.mediaUrl = (event.target as HTMLInputElement).value;
+      renderPreview(question);
+      save();
+    });
   }
-  $("#mediaUrl").addEventListener("input", (event) => {
-    question.mediaUrl = (event.target as HTMLInputElement).value;
-    renderPreview(question);
-    save();
-  });
 }
 
 async function toggleRecording(question: Question) {
@@ -300,8 +298,8 @@ function renderPreview(question: Question) {
   const media = $("#previewMedia");
   if (question.mediaType === "image" && question.mediaUrl) {
     media.innerHTML = `<img src="${escapeAttribute(question.mediaUrl)}" alt="Question illustration" />`;
-  } else if (question.mediaType === "audio" && (audioObjectUrls.get(question.id) || question.mediaUrl)) {
-    media.innerHTML = `<div class="embedded-audio"><span>Listen to the question</span><audio controls src="${escapeAttribute(audioObjectUrls.get(question.id) || question.mediaUrl)}"></audio></div>`;
+  } else if (question.mediaType === "audio" && audioObjectUrls.get(question.id)) {
+    media.innerHTML = `<div class="embedded-audio"><span>Listen to the question</span><audio controls src="${escapeAttribute(audioObjectUrls.get(question.id)!)}"></audio></div>`;
   } else {
     media.innerHTML = "";
   }
@@ -361,7 +359,7 @@ async function createTestHtml() {
     imageUrl: question.mediaType === "image" ? question.mediaUrl : "",
     audioUrl: question.mediaType === "audio" && audioRecordings.has(question.id)
       ? await blobToDataUrl(audioRecordings.get(question.id)!)
-      : question.mediaType === "audio" ? question.mediaUrl : "",
+      : "",
   })));
   const safeData = JSON.stringify({ title: "Audio Quiz", questions: testQuestions }).replace(/</g, "\\u003c");
 
