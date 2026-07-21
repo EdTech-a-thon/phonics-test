@@ -43,6 +43,9 @@ const sampleQuestions: Question[] = [
 let questions: Question[] = structuredClone(sampleQuestions);
 let selectedId = 1;
 let nextId = 4;
+const audioRecordings = new Map<number, Blob>();
+const audioObjectUrls = new Map<number, string>();
+let mediaRecorder: MediaRecorder | null = null;
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 
@@ -110,14 +113,14 @@ app.innerHTML = `
             <div id="previewChoices"></div>
           </div>
         </div>
-        <p class="preview-note">This is how the selected question will look. Audio opens from a Drive link because Google Forms cannot embed an audio player.</p>
+        <p class="preview-note">This is how the selected question will look in your custom student form.</p>
       </aside>
     </section>
 
     <section class="finish-bar">
-      <div><span id="readyDot"></span><strong id="readyText">All 3 questions are ready</strong><small>Images are embedded; audio is included as a clickable link.</small></div>
-      <button class="secondary" id="copyButton">Copy for manual entry</button>
-      <button class="primary" id="createButton">Create Google Form <span>↗</span></button>
+      <div><span id="readyDot"></span><strong id="readyText">All 3 questions are ready</strong><small>Pictures and audio players are embedded in the student form.</small></div>
+      <button class="secondary" id="copyButton">Copy question list</button>
+      <button class="primary" id="createButton">Publish student form <span>↗</span></button>
     </section>
   </main>
 
@@ -136,13 +139,13 @@ app.innerHTML = `
     <div class="dialog-card connect-card">
       <button class="dialog-close" id="closeConnect" aria-label="Close">×</button>
       <p class="eyebrow">ONE-TIME CONNECTION</p>
-      <h2>Connect to Google Forms</h2>
-      <p>This prototype uses a small Google Apps Script that runs inside your own Google account. Your questions never need to be stored on our server.</p>
+      <h2>Connect Google Drive & Sheets</h2>
+      <p>This prototype uses a small Google Apps Script in your account. It saves recordings in Drive, collects answers in Sheets, and hosts the student form.</p>
       <ol><li>Open Apps Script and create a new project.</li><li>Paste in the helper code below, then deploy it as a web app.</li><li>Paste the web app address here.</li></ol>
       <div class="connect-actions"><a href="https://script.google.com/home/start" target="_blank">Open Apps Script ↗</a><button id="copyScript">Copy helper code</button></div>
       <label class="field-label" for="endpoint">YOUR WEB APP ADDRESS</label>
       <input id="endpoint" type="url" placeholder="https://script.google.com/macros/s/.../exec" />
-      <p class="audio-callout"><b>About audio:</b> Google Forms currently supports pictures and YouTube videos, but not embedded audio. This tool places your shared audio link in the question so students can open it.</p>
+      <p class="audio-callout"><b>Why a custom form?</b> Native Google Forms cannot embed audio. The published student form looks and behaves like a simple quiz, but includes an audio player and sends every response to your Google Sheet.</p>
       <div class="dialog-actions"><button id="cancelConnect">Cancel</button><button id="saveConnect">Save connection</button></div>
     </div>
   </dialog>
@@ -158,6 +161,40 @@ function selectedQuestion() {
 
 function save() {
   localStorage.setItem("formflow-questions", JSON.stringify(questions));
+}
+
+function openRecordingStore() {
+  return new Promise<IDBDatabase>((resolve, reject) => {
+    const request = indexedDB.open("formflow", 1);
+    request.addEventListener("upgradeneeded", () => request.result.createObjectStore("recordings"));
+    request.addEventListener("success", () => resolve(request.result));
+    request.addEventListener("error", () => reject(request.error));
+  });
+}
+
+async function storeRecording(id: number, blob: Blob | null) {
+  const database = await openRecordingStore();
+  const transaction = database.transaction("recordings", "readwrite");
+  const store = transaction.objectStore("recordings");
+  if (blob) store.put(blob, id);
+  else store.delete(id);
+}
+
+async function loadRecordings() {
+  const database = await openRecordingStore();
+  const transaction = database.transaction("recordings", "readonly");
+  const store = transaction.objectStore("recordings");
+  await Promise.all(questions.map((question) => new Promise<void>((resolve) => {
+    const request = store.get(question.id);
+    request.addEventListener("success", () => {
+      if (request.result instanceof Blob) {
+        audioRecordings.set(question.id, request.result);
+        audioObjectUrls.set(question.id, URL.createObjectURL(request.result));
+      }
+      resolve();
+    });
+    request.addEventListener("error", () => resolve());
+  })));
 }
 
 function load() {
@@ -205,13 +242,64 @@ function renderMediaField(question: Question) {
     field.innerHTML = `<div class="empty-media">No media attached. Choose Picture or Audio above.</div>`;
     return;
   }
-  const label = question.mediaType === "image" ? "Public image address" : "Shared Google Drive audio address";
-  field.innerHTML = `<div class="media-input"><span>${question.mediaType === "image" ? "▧" : "◖"}</span><div><small>${label}</small><input id="mediaUrl" value="${escapeAttribute(question.mediaUrl)}" placeholder="Paste a link here" /></div><b>${question.mediaUrl ? "✓" : "+"}</b></div>`;
+  if (question.mediaType === "audio") {
+    const recordingUrl = audioObjectUrls.get(question.id) || question.mediaUrl;
+    field.innerHTML = `
+      <div class="audio-recorder">
+        <button id="recordButton" class="record-button"><i></i><span>${recordingUrl ? "Record again" : "Start recording"}</span></button>
+        <div class="recording-status"><strong>${recordingUrl ? "Recording ready" : "Use your microphone"}</strong><small>${recordingUrl ? "It will be saved to Google Drive when published." : "You can listen before publishing."}</small></div>
+        ${recordingUrl ? `<audio controls src="${escapeAttribute(recordingUrl)}"></audio>` : ""}
+      </div>
+      <div class="or-divider"><span>or use an existing shared audio link</span></div>
+      <div class="media-input"><span>◖</span><div><small>Shared audio address</small><input id="mediaUrl" value="${escapeAttribute(question.mediaUrl)}" placeholder="Paste a link here" /></div><b>${question.mediaUrl ? "✓" : "+"}</b></div>`;
+    $("#recordButton").addEventListener("click", () => toggleRecording(question));
+  } else {
+    field.innerHTML = `<div class="media-input"><span>▧</span><div><small>Public image address</small><input id="mediaUrl" value="${escapeAttribute(question.mediaUrl)}" placeholder="Paste a link here" /></div><b>${question.mediaUrl ? "✓" : "+"}</b></div>`;
+  }
   $("#mediaUrl").addEventListener("input", (event) => {
     question.mediaUrl = (event.target as HTMLInputElement).value;
     renderPreview(question);
     save();
   });
+}
+
+async function toggleRecording(question: Question) {
+  if (mediaRecorder?.state === "recording") {
+    mediaRecorder.stop();
+    return;
+  }
+
+  if (!navigator.mediaDevices?.getUserMedia) {
+    showToast("Audio recording is not supported in this browser");
+    return;
+  }
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const chunks: Blob[] = [];
+    mediaRecorder = new MediaRecorder(stream);
+    mediaRecorder.addEventListener("dataavailable", (event) => chunks.push(event.data));
+    mediaRecorder.addEventListener("stop", () => {
+      const blob = new Blob(chunks, { type: mediaRecorder?.mimeType || "audio/webm" });
+      const oldUrl = audioObjectUrls.get(question.id);
+      if (oldUrl) URL.revokeObjectURL(oldUrl);
+      audioRecordings.set(question.id, blob);
+      audioObjectUrls.set(question.id, URL.createObjectURL(blob));
+      void storeRecording(question.id, blob);
+      stream.getTracks().forEach((track) => track.stop());
+      mediaRecorder = null;
+      render();
+      showToast("Recording saved in this draft");
+    });
+    mediaRecorder.start();
+    const button = $<HTMLButtonElement>("#recordButton");
+    button.classList.add("recording");
+    button.querySelector("span")!.textContent = "Stop recording";
+    const status = document.querySelector<HTMLElement>(".recording-status strong");
+    if (status) status.textContent = "Recording now...";
+  } catch {
+    showToast("Please allow microphone access to record audio");
+  }
 }
 
 function renderChoices(question: Question) {
@@ -228,8 +316,8 @@ function renderPreview(question: Question) {
   const media = $("#previewMedia");
   if (question.mediaType === "image" && question.mediaUrl) {
     media.innerHTML = `<img src="${escapeAttribute(question.mediaUrl)}" alt="Question illustration" />`;
-  } else if (question.mediaType === "audio" && question.mediaUrl) {
-    media.innerHTML = `<a class="audio-preview" href="${escapeAttribute(question.mediaUrl)}" target="_blank"><span>▶</span><div><strong>Listen to audio</strong><small>Opens in Google Drive</small></div></a>`;
+  } else if (question.mediaType === "audio" && (audioObjectUrls.get(question.id) || question.mediaUrl)) {
+    media.innerHTML = `<div class="embedded-audio"><span>Listen to the question</span><audio controls src="${escapeAttribute(audioObjectUrls.get(question.id) || question.mediaUrl)}"></audio></div>`;
   } else {
     media.innerHTML = "";
   }
@@ -273,6 +361,7 @@ function parseQuestions(text: string): Question[] {
 
 function questionPayload() {
   return questions.map((question) => ({
+    id: question.id,
     title: question.prompt,
     choices: question.choices,
     correct: question.choices[question.correct],
@@ -282,29 +371,54 @@ function questionPayload() {
   }));
 }
 
+function blobToBase64(blob: Blob) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener("load", () => resolve(String(reader.result).split(",")[1]));
+    reader.addEventListener("error", () => reject(reader.error));
+    reader.readAsDataURL(blob);
+  });
+}
+
 const helperScript = `function doPost(e) {
   var data = JSON.parse(e.postData.contents);
-  var form = FormApp.create(data.title || 'New quiz');
-  form.setIsQuiz(true);
-
-  data.questions.forEach(function(q) {
-    if (q.imageUrl) {
-      var image = UrlFetchApp.fetch(q.imageUrl).getBlob();
-      form.addImageItem().setImage(image).setTitle('Question image');
+  var token = Utilities.getUuid();
+  var folder = DriveApp.createFolder((data.title || 'Audio quiz') + ' files');
+  var sheet = SpreadsheetApp.create((data.title || 'Audio quiz') + ' responses');
+  var questions = data.questions.map(function(q) {
+    var recording = data.recordings[String(q.id)];
+    if (recording) {
+      var bytes = Utilities.base64Decode(recording.data);
+      var file = folder.createFile(Utilities.newBlob(bytes, recording.type, 'question-' + q.id + '.webm'));
+      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      q.audioUrl = 'https://drive.google.com/uc?export=download&id=' + file.getId();
     }
-    var item = form.addMultipleChoiceItem();
-    var title = q.title;
-    if (q.audioUrl) title += '\\nListen: ' + q.audioUrl;
-    item.setTitle(title).setRequired(q.required);
-    item.setChoices(q.choices.map(function(choice) {
-      return item.createChoice(choice, choice === q.correct);
-    }));
-    item.setPoints(1);
+    return q;
   });
-
+  sheet.getSheets()[0].appendRow(['Submitted at'].concat(questions.map(function(q) { return q.title; })));
+  PropertiesService.getScriptProperties().setProperty(token, JSON.stringify({
+    title: data.title || 'Audio quiz', questions: questions, sheetId: sheet.getId()
+  }));
   return ContentService.createTextOutput(JSON.stringify({
-    editUrl: form.getEditUrl(), publishedUrl: form.getPublishedUrl()
+    studentUrl: ScriptApp.getService().getUrl() + '?form=' + token,
+    sheetUrl: sheet.getUrl()
   })).setMimeType(ContentService.MimeType.JSON);
+}
+
+function doGet(e) {
+  var config = JSON.parse(PropertiesService.getScriptProperties().getProperty(e.parameter.form) || 'null');
+  if (!config) return HtmlService.createHtmlOutput('<h1>Form not found</h1>');
+  var safeData = JSON.stringify({ token: e.parameter.form, title: config.title, questions: config.questions }).replace(/</g, '\\u003c');
+  var html = '<!doctype html><html><head><meta name="viewport" content="width=device-width"><style>' +
+    'body{margin:0;background:#f4f3ee;color:#25302c;font:16px Arial,sans-serif}.wrap{max-width:700px;margin:32px auto;padding:0 16px}header,.card{background:white;border-radius:8px;padding:26px;margin-bottom:16px;border-top:7px solid #176b52;box-shadow:0 5px 20px #0000000d}h1{margin:0 0 8px}.card{border-top:0}img{max-width:100%;max-height:360px;border-radius:5px}audio{width:100%;margin:14px 0}.choice{display:block;padding:11px;border:1px solid #ddd;border-radius:5px;margin:8px 0}button{background:#176b52;color:white;border:0;border-radius:5px;padding:13px 24px;font-weight:bold}#thanks{display:none}</style></head>' +
+    '<body><main class="wrap"><header><h1 id="title"></h1><p>Listen carefully and choose an answer.</p></header><form id="quiz"></form><div id="thanks"><header><h1>Response received</h1><p>Your answers have been saved.</p></header></div></main><script>var data=' + safeData + ';' +
+    'document.getElementById("title").textContent=data.title;var quiz=document.getElementById("quiz");data.questions.forEach(function(q,i){var card=document.createElement("section");card.className="card";var h=document.createElement("h3");h.textContent=(i+1)+". "+q.title;card.appendChild(h);if(q.imageUrl){var img=document.createElement("img");img.src=q.imageUrl;img.alt="Question image";card.appendChild(img)}if(q.audioUrl){var audio=document.createElement("audio");audio.controls=true;audio.preload="metadata";audio.src=q.audioUrl;card.appendChild(audio)}q.choices.forEach(function(c){var label=document.createElement("label");label.className="choice";var input=document.createElement("input");input.type="radio";input.name="q"+i;input.value=c;input.required=q.required;label.appendChild(input);label.appendChild(document.createTextNode(" "+c));card.appendChild(label)});quiz.appendChild(card)});var button=document.createElement("button");button.type="submit";button.textContent="Submit answers";quiz.appendChild(button);quiz.onsubmit=function(e){e.preventDefault();button.disabled=true;button.textContent="Saving...";var answers=data.questions.map(function(q,i){var picked=document.querySelector("input[name=q"+i+"]:checked");return picked?picked.value:""});google.script.run.withSuccessHandler(function(){quiz.style.display="none";document.getElementById("thanks").style.display="block"}).saveResponse(data.token,answers)};</script></body></html>';
+  return HtmlService.createHtmlOutput(html).setTitle(config.title);
+}
+
+function saveResponse(token, answers) {
+  var config = JSON.parse(PropertiesService.getScriptProperties().getProperty(token));
+  SpreadsheetApp.openById(config.sheetId).getSheets()[0].appendRow([new Date()].concat(answers));
 }`;
 
 $("#questionList").addEventListener("click", (event) => {
@@ -367,6 +481,11 @@ $("#duplicateButton").addEventListener("click", () => {
 $("#deleteButton").addEventListener("click", () => {
   if (questions.length === 1) return showToast("Keep at least one question");
   const index = questions.indexOf(selectedQuestion());
+  audioRecordings.delete(selectedId);
+  void storeRecording(selectedId, null);
+  const audioUrl = audioObjectUrls.get(selectedId);
+  if (audioUrl) URL.revokeObjectURL(audioUrl);
+  audioObjectUrls.delete(selectedId);
   questions.splice(index, 1);
   selectedId = questions[Math.min(index, questions.length - 1)].id;
   render();
@@ -414,13 +533,17 @@ $("#copyButton").addEventListener("click", async () => {
 $("#createButton").addEventListener("click", async () => {
   const endpoint = localStorage.getItem("formflow-endpoint");
   if (!endpoint) return connectDialog.showModal();
-  showToast("Creating your Google Form...");
+  showToast("Uploading recordings and publishing...");
   try {
-    const response = await fetch(endpoint, { method: "POST", body: JSON.stringify({ title: "FormFlow quiz", questions: questionPayload() }) });
-    const result = await response.json() as { editUrl?: string };
-    if (!result.editUrl) throw new Error("No form address returned");
-    window.open(result.editUrl, "_blank", "noopener,noreferrer");
-    showToast("Your Google Form is ready");
+    const recordings: Record<string, { data: string; type: string }> = {};
+    for (const [id, blob] of audioRecordings) {
+      recordings[String(id)] = { data: await blobToBase64(blob), type: blob.type };
+    }
+    const response = await fetch(endpoint, { method: "POST", body: JSON.stringify({ title: "FormFlow audio quiz", questions: questionPayload(), recordings }) });
+    const result = await response.json() as { studentUrl?: string; sheetUrl?: string };
+    if (!result.studentUrl) throw new Error("No form address returned");
+    window.open(result.studentUrl, "_blank", "noopener,noreferrer");
+    showToast("Student form published; recordings saved to Drive");
   } catch {
     showToast("Google blocked the request. Check the web app deployment settings.");
   }
@@ -428,4 +551,4 @@ $("#createButton").addEventListener("click", async () => {
 
 load();
 $<HTMLInputElement>("#endpoint").value = localStorage.getItem("formflow-endpoint") ?? "";
-render();
+loadRecordings().finally(render);
