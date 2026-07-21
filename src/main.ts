@@ -10,10 +10,16 @@ type Question = {
   required: boolean;
 };
 
+type Project = {
+  id: string;
+  name: string;
+  questions: Question[];
+};
+
 const sampleQuestions: Question[] = [
   {
     id: 1,
-    prompt: "Which word begins with the /sh/ sound?",
+    prompt: "",
     choices: ["ship", "chip", "sip", "tip"],
     correct: 0,
     mediaType: "audio",
@@ -22,7 +28,7 @@ const sampleQuestions: Question[] = [
   },
   {
     id: 2,
-    prompt: "Which picture shows a nocturnal animal?",
+    prompt: "",
     choices: ["Owl", "Butterfly", "Squirrel", "Bee"],
     correct: 0,
     mediaType: "image",
@@ -40,11 +46,16 @@ const sampleQuestions: Question[] = [
   },
 ];
 
-let questions: Question[] = structuredClone(sampleQuestions);
+const demoProject: Project = { id: "demo", name: "Demo project", questions: structuredClone(sampleQuestions) };
+let projects: Project[] = [demoProject];
+let activeProjectId = "demo";
+let questions: Question[] = projects[0].questions;
 let selectedId = 1;
 let nextId = 4;
 const audioRecordings = new Map<number, Blob>();
 const audioObjectUrls = new Map<number, string>();
+const imageFiles = new Map<number, Blob>();
+const imageObjectUrls = new Map<number, string>();
 let mediaRecorder: MediaRecorder | null = null;
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
@@ -52,6 +63,12 @@ const app = document.querySelector<HTMLDivElement>("#app")!;
 app.innerHTML = `
   <header class="topbar">
     <a class="brand" href="#">Form<span>Flow</span><b>↗</b></a>
+    <div class="project-controls">
+      <select id="projectSelect" aria-label="Current project"></select>
+      <button id="newProject">+ New project</button>
+      <button id="renameProject">Rename</button>
+      <button id="deleteProject">Delete</button>
+    </div>
     <div class="top-actions">
       <span class="save-state"><i></i> Saved on this device</span>
       <button class="text-button" id="helpButton">How it works</button>
@@ -65,7 +82,6 @@ app.innerHTML = `
           <button class="icon-button" id="addQuestion" aria-label="Add question">+</button>
         </div>
         <div id="questionList" class="question-list"></div>
-        <button class="paste-button" id="pasteButton"><span>⊕</span> Paste a question list</button>
       </aside>
 
       <section class="editor-panel">
@@ -76,18 +92,17 @@ app.innerHTML = `
             <button class="mini-button danger" id="deleteButton" title="Delete">⌫</button>
           </div>
         </div>
-        <label class="field-label" for="prompt">QUESTION</label>
-        <textarea id="prompt" rows="2" placeholder="Type your question"></textarea>
-
-        <div class="media-header">
-          <label class="field-label">QUESTION CONTENT <span>OPTIONAL</span></label>
-          <div class="segmented" id="mediaPicker">
-            <button data-media="none">None</button>
-            <button data-media="image">▧ Picture</button>
-            <button data-media="audio">◖ Audio</button>
+        <div class="question-title-box">
+          <div class="media-header">
+            <label class="field-label">QUESTION TITLE</label>
+            <div class="segmented" id="mediaPicker">
+              <button data-media="none">Text</button>
+              <button data-media="image">▧ Picture</button>
+              <button data-media="audio">◖ Audio</button>
+            </div>
           </div>
+          <div id="titleField"></div>
         </div>
-        <div id="mediaField"></div>
 
         <div class="answers-heading">
           <label class="field-label">ANSWER CHOICES</label>
@@ -123,15 +138,17 @@ app.innerHTML = `
     </section>
   </main>
 
-  <dialog id="pasteDialog">
-    <form method="dialog" class="dialog-card">
-      <button class="dialog-close" value="cancel" aria-label="Close">×</button>
-      <p class="eyebrow">QUICK IMPORT</p>
-      <h2>Paste the mess. We'll sort it.</h2>
-      <p>Put each question in a block. Start choices with A), B), C), or D), and add an asterisk to the correct one.</p>
-      <textarea id="bulkText" rows="12">Which animal sleeps during the day?\nA) Robin\n*B) Owl\nC) Butterfly\nD) Squirrel\n\nWhat sound does “ship” begin with?\n*A) sh\nB) ch\nC) s\nD) t</textarea>
-      <div class="dialog-actions"><button value="cancel">Cancel</button><button value="default" id="importButton">Import questions</button></div>
-    </form>
+  <dialog id="imageDialog">
+    <div class="dialog-card image-dialog-card">
+      <button class="dialog-close" id="closeImageDialog" aria-label="Close">×</button>
+      <p class="eyebrow">QUESTION IMAGE</p>
+      <h2>Choose an image</h2>
+      <label class="image-drop" id="imageDrop">
+        <input id="imageInput" type="file" accept="image/*" />
+        <strong>Drop an image here</strong>
+        <span>or click to choose a file</span>
+      </label>
+    </div>
   </dialog>
 
   <div id="toast" role="status"></div>
@@ -144,7 +161,10 @@ function selectedQuestion() {
 }
 
 function save() {
-  localStorage.setItem("formflow-questions", JSON.stringify(questions));
+  const project = projects.find((item) => item.id === activeProjectId)!;
+  project.questions = questions;
+  localStorage.setItem("formflow-projects", JSON.stringify(projects));
+  localStorage.setItem("formflow-active-project", activeProjectId);
 }
 
 function openRecordingStore() {
@@ -156,43 +176,59 @@ function openRecordingStore() {
   });
 }
 
-async function storeRecording(id: number, blob: Blob | null) {
+function assetKey(type: "audio" | "image", questionId: number, projectId = activeProjectId) {
+  return `${projectId}:${type}:${questionId}`;
+}
+
+async function storeAsset(type: "audio" | "image", id: number, blob: Blob | null) {
   const database = await openRecordingStore();
   const transaction = database.transaction("recordings", "readwrite");
   const store = transaction.objectStore("recordings");
-  if (blob) store.put(blob, id);
-  else store.delete(id);
+  if (blob) store.put(blob, assetKey(type, id));
+  else store.delete(assetKey(type, id));
 }
 
-async function loadRecordings() {
+async function loadAssets() {
+  audioObjectUrls.forEach((url) => URL.revokeObjectURL(url));
+  imageObjectUrls.forEach((url) => URL.revokeObjectURL(url));
+  audioRecordings.clear();
+  audioObjectUrls.clear();
+  imageFiles.clear();
+  imageObjectUrls.clear();
   const database = await openRecordingStore();
   const transaction = database.transaction("recordings", "readonly");
   const store = transaction.objectStore("recordings");
-  await Promise.all(questions.map((question) => new Promise<void>((resolve) => {
-    const request = store.get(question.id);
-    request.addEventListener("success", () => {
-      if (request.result instanceof Blob) {
-        audioRecordings.set(question.id, request.result);
-        audioObjectUrls.set(question.id, URL.createObjectURL(request.result));
-      }
-      resolve();
-    });
-    request.addEventListener("error", () => resolve());
-  })));
+  await Promise.all(questions.flatMap((question) => (["audio", "image"] as const).map((type) => new Promise<void>((resolve) => {
+      const request = store.get(assetKey(type, question.id));
+      request.addEventListener("success", () => {
+        if (request.result instanceof Blob) {
+          const blobs = type === "audio" ? audioRecordings : imageFiles;
+          const urls = type === "audio" ? audioObjectUrls : imageObjectUrls;
+          blobs.set(question.id, request.result);
+          urls.set(question.id, URL.createObjectURL(request.result));
+        }
+        resolve();
+      });
+      request.addEventListener("error", () => resolve());
+    }))));
 }
 
 function load() {
-  const saved = localStorage.getItem("formflow-questions");
+  const saved = localStorage.getItem("formflow-projects");
   if (!saved) return;
   try {
-    const parsed = JSON.parse(saved) as Question[];
+    const parsed = JSON.parse(saved) as Project[];
     if (parsed.length) {
-      questions = parsed;
+      projects = parsed;
+      activeProjectId = localStorage.getItem("formflow-active-project") ?? parsed[0].id;
+      const activeProject = projects.find((project) => project.id === activeProjectId) ?? projects[0];
+      activeProjectId = activeProject.id;
+      questions = activeProject.questions;
       selectedId = questions[0].id;
       nextId = Math.max(...questions.map((question) => question.id)) + 1;
     }
   } catch {
-    localStorage.removeItem("formflow-questions");
+    localStorage.removeItem("formflow-projects");
   }
 }
 
@@ -200,6 +236,7 @@ function render() {
   if (!questions.length) addQuestion();
   const question = selectedQuestion();
   const index = questions.indexOf(question);
+  $("#projectSelect").innerHTML = projects.map((project) => `<option value="${escapeAttribute(project.id)}" ${project.id === activeProjectId ? "selected" : ""}>${escapeHtml(project.name)}</option>`).join("");
   $("#panelCount").textContent = `${questions.length} total`;
   $("#readyText").textContent = `All ${questions.length} questions are ready`;
   $("#editorNumber").textContent = `QUESTION ${String(index + 1).padStart(2, "0")}`;
@@ -207,23 +244,24 @@ function render() {
   $("#questionList").innerHTML = questions.map((item, itemIndex) => `
     <button class="question-row ${item.id === selectedId ? "selected" : ""}" data-id="${item.id}">
       <span>${String(itemIndex + 1).padStart(2, "0")}</span>
-      <div><strong>${escapeHtml(item.prompt || "Untitled question")}</strong><small>${item.choices.length} choices ${item.mediaType !== "none" ? `· ${item.mediaType}` : ""}</small></div>
+      <div><strong>${escapeHtml(item.prompt || `${item.mediaType === "none" ? "Untitled" : item.mediaType} question`)}</strong><small>${item.choices.length} choices ${item.mediaType !== "none" ? `· ${item.mediaType}` : ""}</small></div>
       <i>›</i>
     </button>`).join("");
 
-  $<HTMLTextAreaElement>("#prompt").value = question.prompt;
   $<HTMLInputElement>("#required").checked = question.required;
   document.querySelectorAll<HTMLButtonElement>("#mediaPicker button").forEach((button) => button.classList.toggle("active", button.dataset.media === question.mediaType));
-  renderMediaField(question);
+  renderTitleField(question);
   renderChoices(question);
   renderPreview(question);
   save();
 }
 
-function renderMediaField(question: Question) {
-  const field = $("#mediaField");
+function renderTitleField(question: Question) {
+  const field = $("#titleField");
   if (question.mediaType === "none") {
-    field.innerHTML = `<div class="empty-media">No media attached. Choose Picture or Audio above.</div>`;
+    field.innerHTML = `<textarea id="prompt" rows="3" placeholder="Type your question"></textarea>`;
+    $<HTMLTextAreaElement>("#prompt").value = question.prompt;
+    $("#prompt").addEventListener("input", updatePrompt);
     return;
   }
   if (question.mediaType === "audio") {
@@ -236,13 +274,18 @@ function renderMediaField(question: Question) {
       </div>`;
     $("#recordButton").addEventListener("click", () => toggleRecording(question));
   } else {
-    field.innerHTML = `<div class="media-input"><span>▧</span><div><small>Public image address</small><input id="mediaUrl" value="${escapeAttribute(question.mediaUrl)}" placeholder="Paste a link here" /></div><b>${question.mediaUrl ? "✓" : "+"}</b></div>`;
-    $("#mediaUrl").addEventListener("input", (event) => {
-      question.mediaUrl = (event.target as HTMLInputElement).value;
-      renderPreview(question);
-      save();
-    });
+    const imageUrl = imageObjectUrls.get(question.id) || question.mediaUrl;
+    field.innerHTML = `<button class="image-title-button" id="chooseImage">${imageUrl ? `<img src="${escapeAttribute(imageUrl)}" alt="Selected question image"><span>Change image</span>` : `<strong>Choose or drop an image</strong><span>The image will be the question title</span>`}</button>`;
+    $("#chooseImage").addEventListener("click", () => imageDialog.showModal());
   }
+}
+
+function updatePrompt(event: Event) {
+  selectedQuestion().prompt = (event.target as HTMLTextAreaElement).value;
+  renderPreview(selectedQuestion());
+  const selectedTitle = document.querySelector<HTMLElement>(".question-row.selected strong");
+  if (selectedTitle) selectedTitle.textContent = selectedQuestion().prompt || "Text question";
+  save();
 }
 
 async function toggleRecording(question: Question) {
@@ -267,7 +310,7 @@ async function toggleRecording(question: Question) {
       if (oldUrl) URL.revokeObjectURL(oldUrl);
       audioRecordings.set(question.id, blob);
       audioObjectUrls.set(question.id, URL.createObjectURL(blob));
-      void storeRecording(question.id, blob);
+      void storeAsset("audio", question.id, blob);
       stream.getTracks().forEach((track) => track.stop());
       mediaRecorder = null;
       render();
@@ -294,10 +337,12 @@ function renderChoices(question: Question) {
 }
 
 function renderPreview(question: Question) {
-  $("#previewQuestion").textContent = question.prompt || "Your question will appear here";
+  $("#previewQuestion").textContent = question.prompt;
+  $("#previewQuestion").hidden = !question.prompt || question.mediaType !== "none";
   const media = $("#previewMedia");
-  if (question.mediaType === "image" && question.mediaUrl) {
-    media.innerHTML = `<img src="${escapeAttribute(question.mediaUrl)}" alt="Question illustration" />`;
+  const imageUrl = imageObjectUrls.get(question.id) || question.mediaUrl;
+  if (question.mediaType === "image" && imageUrl) {
+    media.innerHTML = `<img src="${escapeAttribute(imageUrl)}" alt="Question illustration" />`;
   } else if (question.mediaType === "audio" && audioObjectUrls.get(question.id)) {
     media.innerHTML = `<div class="embedded-audio"><span>Listen to the question</span><audio controls src="${escapeAttribute(audioObjectUrls.get(question.id)!)}"></audio></div>`;
   } else {
@@ -328,19 +373,6 @@ function showToast(message: string) {
   window.setTimeout(() => toast.classList.remove("show"), 2800);
 }
 
-function parseQuestions(text: string): Question[] {
-  return text.trim().split(/\n\s*\n/).map((block) => {
-    const lines = block.split("\n").map((line) => line.trim()).filter(Boolean);
-    const prompt = lines.shift()?.replace(/^\d+[.)]\s*/, "") ?? "Untitled question";
-    let correct = 0;
-    const choices = lines.map((line, index) => {
-      if (line.startsWith("*")) correct = index;
-      return line.replace(/^\*?\s*[A-Z][.)]\s*/i, "");
-    });
-    return { id: nextId++, prompt, choices: choices.length ? choices : ["Option 1", "Option 2"], correct, mediaType: "none", mediaUrl: "", required: true };
-  });
-}
-
 function blobToDataUrl(blob: Blob) {
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
@@ -356,19 +388,22 @@ async function createTestHtml() {
     choices: question.choices,
     correct: question.correct,
     required: question.required,
-    imageUrl: question.mediaType === "image" ? question.mediaUrl : "",
+    imageUrl: question.mediaType === "image" && imageFiles.has(question.id)
+      ? await blobToDataUrl(imageFiles.get(question.id)!)
+      : question.mediaType === "image" ? question.mediaUrl : "",
     audioUrl: question.mediaType === "audio" && audioRecordings.has(question.id)
       ? await blobToDataUrl(audioRecordings.get(question.id)!)
       : "",
   })));
-  const safeData = JSON.stringify({ title: "Audio Quiz", questions: testQuestions }).replace(/</g, "\\u003c");
+  const projectName = projects.find((project) => project.id === activeProjectId)?.name ?? "Test";
+  const safeData = JSON.stringify({ title: projectName, questions: testQuestions }).replace(/</g, "\\u003c");
 
   return `<!doctype html>
 <html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Audio Quiz</title><style>
+<title>${escapeHtml(projectName)}</title><style>
 *{box-sizing:border-box}body{margin:0;background:#f4f3ee;color:#25302c;font:16px Arial,sans-serif}.wrap{max-width:720px;margin:34px auto;padding:0 16px 50px}header,.card,.results{background:#fff;border-radius:8px;padding:26px;margin-bottom:16px;box-shadow:0 5px 20px #0000000d}header{border-top:8px solid #176b52}h1{margin:0 0 8px}h3{margin-top:0}p{color:#66706b}.card.missed{border-left:5px solid #b74c3e}.card.correct{border-left:5px solid #25805e}img{display:block;max-width:100%;max-height:360px;border-radius:5px;margin:15px 0}audio{width:100%;margin:12px 0}.choice{display:block;padding:12px;border:1px solid #d9dcd8;border-radius:5px;margin:8px 0;cursor:pointer}.choice:has(input:checked){border-color:#176b52;background:#edf6f1}button{background:#176b52;color:#fff;border:0;border-radius:5px;padding:13px 24px;font-weight:bold;cursor:pointer}.results{display:none;text-align:center}.score{color:#176b52;font-size:54px;font-weight:bold;margin:8px}.review{font-size:14px;text-align:left}.answer{font-weight:bold}.wrong{color:#a43f33}.right{color:#176b52}@media(max-width:600px){.wrap{margin:12px auto}header,.card,.results{padding:20px}}
-</style></head><body><main class="wrap"><header><h1 id="title"></h1><p>Choose the best answer for each question, then submit to see your score.</p></header><form id="quiz"></form><section class="results" id="results"><p>YOUR SCORE</p><div class="score" id="score"></div><h2 id="message"></h2><div class="review" id="review"></div><button id="retry" type="button">Try again</button></section></main>
-<script>const data=${safeData};const quiz=document.getElementById('quiz');document.getElementById('title').textContent=data.title;data.questions.forEach((q,i)=>{const card=document.createElement('section');card.className='card';card.id='question-'+i;const heading=document.createElement('h3');heading.textContent=(i+1)+'. '+q.prompt;card.append(heading);if(q.imageUrl){const image=document.createElement('img');image.src=q.imageUrl;image.alt='Question image';card.append(image)}if(q.audioUrl){const audio=document.createElement('audio');audio.controls=true;audio.preload='metadata';audio.src=q.audioUrl;card.append(audio)}q.choices.forEach((choice,j)=>{const label=document.createElement('label');label.className='choice';const input=document.createElement('input');input.type='radio';input.name='q'+i;input.value=String(j);input.required=q.required;label.append(input,document.createTextNode(' '+choice));card.append(label)});quiz.append(card)});const submit=document.createElement('button');submit.type='submit';submit.textContent='Grade my test';quiz.append(submit);quiz.addEventListener('submit',event=>{event.preventDefault();let correct=0;const review=document.getElementById('review');review.innerHTML='';data.questions.forEach((q,i)=>{const picked=document.querySelector('input[name=q'+i+']:checked');const answer=picked?Number(picked.value):-1;const isCorrect=answer===q.correct;if(isCorrect)correct++;const card=document.getElementById('question-'+i);card.classList.add(isCorrect?'correct':'missed');const line=document.createElement('p');line.innerHTML='<strong>'+(i+1)+'. '+q.prompt+'</strong><br><span class="'+(isCorrect?'right':'wrong')+'">'+(isCorrect?'Correct':'Your answer: '+(answer>=0?q.choices[answer]:'No answer'))+'</span>'+(isCorrect?'':'<br><span class="answer">Correct answer: '+q.choices[q.correct]+'</span>');review.append(line)});const percent=Math.round(correct/data.questions.length*100);document.getElementById('score').textContent=correct+' / '+data.questions.length;document.getElementById('message').textContent=percent>=80?'Excellent work!':percent>=60?'Good effort!':'Keep practicing!';quiz.style.display='none';document.getElementById('results').style.display='block';window.scrollTo({top:0,behavior:'smooth'})});document.getElementById('retry').addEventListener('click',()=>{quiz.reset();document.querySelectorAll('.card').forEach(card=>card.classList.remove('correct','missed'));quiz.style.display='block';document.getElementById('results').style.display='none';window.scrollTo({top:0,behavior:'smooth'})});</script></body></html>`;
+</style></head><body><main class="wrap"><header><h1 id="title"></h1><p>Choose the best answer for each question, then submit to see your score.</p></header><form id="quiz"></form><section class="results" id="results"><p>YOUR SCORE</p><div class="score" id="score"></div><div class="review" id="review"></div><button id="retry" type="button">Try again</button></section></main>
+<script>const data=${safeData};const quiz=document.getElementById('quiz');document.getElementById('title').textContent=data.title;data.questions.forEach((q,i)=>{const card=document.createElement('section');card.className='card';card.id='question-'+i;if(q.prompt){const heading=document.createElement('h3');heading.textContent=(i+1)+'. '+q.prompt;card.append(heading)}if(q.imageUrl){const image=document.createElement('img');image.src=q.imageUrl;image.alt='Question '+(i+1);card.append(image)}if(q.audioUrl){const audio=document.createElement('audio');audio.controls=true;audio.preload='metadata';audio.src=q.audioUrl;audio.setAttribute('aria-label','Question '+(i+1));card.append(audio)}q.choices.forEach((choice,j)=>{const label=document.createElement('label');label.className='choice';const input=document.createElement('input');input.type='radio';input.name='q'+i;input.value=String(j);input.required=q.required;label.append(input,document.createTextNode(' '+choice));card.append(label)});quiz.append(card)});const submit=document.createElement('button');submit.type='submit';submit.textContent='Grade my test';quiz.append(submit);quiz.addEventListener('submit',event=>{event.preventDefault();let correct=0;const review=document.getElementById('review');review.innerHTML='';data.questions.forEach((q,i)=>{const picked=document.querySelector('input[name=q'+i+']:checked');const answer=picked?Number(picked.value):-1;const isCorrect=answer===q.correct;if(isCorrect)correct++;const card=document.getElementById('question-'+i);card.classList.add(isCorrect?'correct':'missed');const line=document.createElement('p');line.innerHTML='<strong>Question '+(i+1)+'</strong><br><span class="'+(isCorrect?'right':'wrong')+'">'+(isCorrect?'Correct':'Your answer: '+(answer>=0?q.choices[answer]:'No answer'))+'</span>'+(isCorrect?'':'<br><span class="answer">Correct answer: '+q.choices[q.correct]+'</span>');review.append(line)});document.getElementById('score').textContent=correct+' / '+data.questions.length;quiz.style.display='none';document.getElementById('results').style.display='block';window.scrollTo({top:0,behavior:'smooth'})});document.getElementById('retry').addEventListener('click',()=>{quiz.reset();document.querySelectorAll('.card').forEach(card=>card.classList.remove('correct','missed'));quiz.style.display='block';document.getElementById('results').style.display='none';window.scrollTo({top:0,behavior:'smooth'})});</script></body></html>`;
 }
 
 $("#questionList").addEventListener("click", (event) => {
@@ -378,18 +413,12 @@ $("#questionList").addEventListener("click", (event) => {
   render();
 });
 
-$("#prompt").addEventListener("input", (event) => {
-  selectedQuestion().prompt = (event.target as HTMLTextAreaElement).value;
-  renderPreview(selectedQuestion());
-  const selectedTitle = document.querySelector<HTMLElement>(".question-row.selected strong");
-  if (selectedTitle) selectedTitle.textContent = selectedQuestion().prompt || "Untitled question";
-  save();
-});
-
 $("#mediaPicker").addEventListener("click", (event) => {
   const button = (event.target as HTMLElement).closest<HTMLButtonElement>("button[data-media]");
   if (!button) return;
-  selectedQuestion().mediaType = button.dataset.media as Question["mediaType"];
+  const question = selectedQuestion();
+  question.mediaType = button.dataset.media as Question["mediaType"];
+  if (question.mediaType !== "none") question.prompt = "";
   render();
 });
 
@@ -432,10 +461,15 @@ $("#deleteButton").addEventListener("click", () => {
   if (questions.length === 1) return showToast("Keep at least one question");
   const index = questions.indexOf(selectedQuestion());
   audioRecordings.delete(selectedId);
-  void storeRecording(selectedId, null);
+  imageFiles.delete(selectedId);
+  void storeAsset("audio", selectedId, null);
+  void storeAsset("image", selectedId, null);
   const audioUrl = audioObjectUrls.get(selectedId);
+  const imageUrl = imageObjectUrls.get(selectedId);
   if (audioUrl) URL.revokeObjectURL(audioUrl);
+  if (imageUrl) URL.revokeObjectURL(imageUrl);
   audioObjectUrls.delete(selectedId);
+  imageObjectUrls.delete(selectedId);
   questions.splice(index, 1);
   selectedId = questions[Math.min(index, questions.length - 1)].id;
   render();
@@ -451,21 +485,82 @@ $("#nextButton").addEventListener("click", () => {
   render();
 });
 
-const pasteDialog = $("#pasteDialog") as HTMLDialogElement;
-$("#pasteButton").addEventListener("click", () => pasteDialog.showModal());
-$("#importButton").addEventListener("click", () => {
-  const imported = parseQuestions($<HTMLTextAreaElement>("#bulkText").value);
-  questions = imported;
-  selectedId = questions[0].id;
-  render();
-  showToast(`${imported.length} questions imported`);
+const imageDialog = $("#imageDialog") as HTMLDialogElement;
+$("#closeImageDialog").addEventListener("click", () => imageDialog.close());
+$("#imageInput").addEventListener("change", (event) => {
+  const file = (event.target as HTMLInputElement).files?.[0];
+  if (file) void setQuestionImage(file);
 });
-$("#helpButton").addEventListener("click", () => pasteDialog.showModal());
+$("#imageDrop").addEventListener("dragover", (event) => { event.preventDefault(); $("#imageDrop").classList.add("dragging"); });
+$("#imageDrop").addEventListener("dragleave", () => $("#imageDrop").classList.remove("dragging"));
+$("#imageDrop").addEventListener("drop", (event) => {
+  event.preventDefault();
+  $("#imageDrop").classList.remove("dragging");
+  const file = event.dataTransfer?.files[0];
+  if (file?.type.startsWith("image/")) void setQuestionImage(file);
+});
+$("#helpButton").addEventListener("click", () => showToast("Create a project, choose each question title type, then download the test."));
+
+async function setQuestionImage(file: File) {
+  const question = selectedQuestion();
+  const oldUrl = imageObjectUrls.get(question.id);
+  if (oldUrl) URL.revokeObjectURL(oldUrl);
+  imageFiles.set(question.id, file);
+  imageObjectUrls.set(question.id, URL.createObjectURL(file));
+  question.mediaUrl = "";
+  await storeAsset("image", question.id, file);
+  imageDialog.close();
+  render();
+}
+
+$("#projectSelect").addEventListener("change", async (event) => {
+  activeProjectId = (event.target as HTMLSelectElement).value;
+  questions = projects.find((project) => project.id === activeProjectId)!.questions;
+  selectedId = questions[0].id;
+  nextId = Math.max(...questions.map((question) => question.id)) + 1;
+  save();
+  await loadAssets();
+  render();
+});
+$("#newProject").addEventListener("click", async () => {
+  const name = window.prompt("Project name", "Untitled test")?.trim();
+  if (!name) return;
+  const id = crypto.randomUUID();
+  const question: Question = { id: 1, prompt: "", choices: ["", "", "", ""], correct: 0, mediaType: "none", mediaUrl: "", required: true };
+  projects.push({ id, name, questions: [question] });
+  activeProjectId = id;
+  questions = [question];
+  selectedId = 1;
+  nextId = 2;
+  save();
+  await loadAssets();
+  render();
+});
+$("#renameProject").addEventListener("click", () => {
+  const project = projects.find((item) => item.id === activeProjectId)!;
+  const name = window.prompt("Project name", project.name)?.trim();
+  if (!name) return;
+  project.name = name;
+  save();
+  render();
+});
+$("#deleteProject").addEventListener("click", async () => {
+  if (projects.length === 1) return showToast("Keep at least one project");
+  const project = projects.find((item) => item.id === activeProjectId)!;
+  if (!window.confirm(`Delete “${project.name}”?`)) return;
+  projects = projects.filter((item) => item.id !== activeProjectId);
+  activeProjectId = projects[0].id;
+  questions = projects[0].questions;
+  selectedId = questions[0].id;
+  save();
+  await loadAssets();
+  render();
+});
 
 $("#copyButton").addEventListener("click", async () => {
   const text = questions.map((question, index) => `${index + 1}. ${question.prompt}\n${question.mediaUrl ? `${question.mediaType.toUpperCase()}: ${question.mediaUrl}\n` : ""}${question.choices.map((choice, choiceIndex) => `${question.correct === choiceIndex ? "*" : ""}${String.fromCharCode(65 + choiceIndex)}) ${choice}`).join("\n")}`).join("\n\n");
   await navigator.clipboard.writeText(text);
-  showToast("Questions copied and ready to paste");
+  showToast("Question list copied");
 });
 
 $("#createButton").addEventListener("click", async () => {
@@ -475,7 +570,8 @@ $("#createButton").addEventListener("click", async () => {
     const url = URL.createObjectURL(new Blob([html], { type: "text/html" }));
     const link = document.createElement("a");
     link.href = url;
-    link.download = "audio-quiz.html";
+    const name = projects.find((project) => project.id === activeProjectId)?.name ?? "test";
+    link.download = `${name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "test"}.html`;
     link.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
     showToast("Test downloaded and ready to share");
@@ -485,4 +581,4 @@ $("#createButton").addEventListener("click", async () => {
 });
 
 load();
-loadRecordings().finally(render);
+loadAssets().finally(render);

@@ -31,6 +31,9 @@ button { cursor: pointer; }
 .brand { color: var(--ink); font: 800 23px "Manrope", sans-serif; text-decoration: none; letter-spacing: -1px; }
 .brand span { color: var(--green); }
 .brand b { font-size: 12px; margin-left: 5px; }
+.project-controls { display: flex; align-items: center; gap: 7px; margin: 0 auto 0 35px; }
+.project-controls select { min-width: 180px; padding: 8px 30px 8px 10px; border: 1px solid #cfd2cd; border-radius: 4px; background: white; color: var(--ink); font-size: 11px; font-weight: 700; }
+.project-controls button { padding: 8px 9px; border: 1px solid #d5d7d1; border-radius: 4px; background: transparent; color: #606662; font-size: 10px; }
 .top-actions { display: flex; align-items: center; gap: 26px; }
 .save-state { color: #707570; font-size: 12px; }
 .save-state i { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #49a979; margin-right: 7px; }
@@ -53,7 +56,6 @@ main { max-width: 1510px; margin: auto; padding: 28px clamp(20px, 4vw, 70px) 50p
 .question-row i { font-size: 20px; font-style: normal; }
 .question-row.selected { background: #e2eee7; border-left: 3px solid var(--green); padding-left: 16px; }
 .question-row.selected > span, .question-row.selected i { color: var(--green); }
-.paste-button { margin: 15px; padding: 12px; border: 1px dashed #98aaa1; background: transparent; color: var(--green); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; }
 
 .editor-panel { padding: 23px clamp(25px, 4vw, 55px); background: #fbfaf6; }
 .editor-topline { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
@@ -64,7 +66,9 @@ main { max-width: 1510px; margin: auto; padding: 28px clamp(20px, 4vw, 70px) 50p
 textarea, input[type="url"] { width: 100%; border: 1px solid #d4d6cf; border-radius: 4px; background: white; color: var(--ink); padding: 12px 13px; outline: none; }
 textarea:focus, input:focus { border-color: #6f9e8b; box-shadow: 0 0 0 3px #d8eee4aa; }
 #prompt { min-height: 65px; resize: vertical; font: 600 15px/1.45 "Manrope"; }
-.media-header, .answers-heading { display: flex; justify-content: space-between; align-items: end; margin-top: 24px; }
+.question-title-box { padding: 16px; border: 1px solid #d8d9d3; border-radius: 5px; background: #f7f7f2; }
+.media-header, .answers-heading { display: flex; justify-content: space-between; align-items: end; }
+.answers-heading { margin-top: 24px; }
 .segmented { display: flex; background: #ecece6; padding: 3px; border-radius: 4px; }
 .segmented button { padding: 6px 11px; border: 0; border-radius: 3px; background: transparent; color: #777c78; font-size: 10px; }
 .segmented button.active { background: white; color: var(--green); box-shadow: 0 1px 3px #0002; font-weight: 700; }
@@ -74,6 +78,10 @@ textarea:focus, input:focus { border-color: #6f9e8b; box-shadow: 0 0 0 3px #d8ee
 .media-input small { display: block; color: #939792; font-size: 9px; margin-bottom: 3px; text-transform: uppercase; }
 .media-input input { width: 100%; border: 0; padding: 0; background: transparent; color: #4d5350; font-size: 11px; outline: none; box-shadow: none; }
 .media-input b { color: var(--green); }
+.image-title-button { width: 100%; min-height: 150px; display: grid; place-items: center; gap: 5px; padding: 12px; border: 2px dashed #a8b7af; border-radius: 5px; background: #fff; color: var(--green); }
+.image-title-button img { max-width: 100%; max-height: 240px; object-fit: contain; border-radius: 4px; }
+.image-title-button strong { font-size: 12px; }
+.image-title-button span { color: #7f8782; font-size: 9px; }
 .audio-recorder { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 12px; padding: 12px; border: 1px solid #cbd8d1; border-radius: 5px; background: #f1f7f4; }
 .audio-recorder audio { grid-column: 1 / -1; width: 100%; height: 36px; }
 .record-button { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border: 0; border-radius: 4px; background: var(--green); color: white; font-size: 10px; font-weight: 700; }
@@ -138,6 +146,11 @@ dialog::backdrop { background: #17251f99; backdrop-filter: blur(3px); }
 .dialog-card > p:not(.eyebrow) { color: #6b716d; font-size: 13px; line-height: 1.6; }
 .dialog-card textarea { margin-top: 12px; resize: vertical; font: 12px/1.6 monospace; }
 .dialog-close { position: absolute; top: 17px; right: 18px; border: 0; background: transparent; color: #777; font-size: 25px; }
+.image-drop { min-height: 230px; display: grid; place-content: center; gap: 8px; margin-top: 20px; border: 2px dashed #96aa9f; border-radius: 7px; background: #f1f7f4; color: var(--green); text-align: center; cursor: pointer; }
+.image-drop.dragging { border-color: var(--orange); background: #fff5ec; }
+.image-drop input { display: none; }
+.image-drop strong { font-size: 15px; }
+.image-drop span { color: #7a837e; font-size: 11px; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
 .dialog-actions button { padding: 10px 14px; border: 1px solid #d0d3cc; border-radius: 4px; background: white; color: #555c57; font-size: 11px; text-decoration: none; }
 .dialog-actions button:last-child { border-color: var(--green); background: var(--green); color: white; }
@@ -152,12 +165,14 @@ dialog::backdrop { background: #17251f99; backdrop-filter: blur(3px); }
 @media (max-width: 720px) {
   .topbar { height: 64px; }
   .save-state, .text-button { display: none; }
+  .project-controls { margin-left: auto; }
+  .project-controls select { min-width: 125px; max-width: 150px; }
+  .project-controls button:not(#newProject) { display: none; }
   main { padding: 12px 12px 30px; }
   .workspace { display: block; }
   .question-list-panel { border-right: 0; }
   .question-list { display: flex; overflow-x: auto; }
   .question-row { min-width: 190px; border-right: 1px solid var(--line); }
-  .paste-button { margin-top: 8px; }
   .editor-panel { padding: 23px 18px; }
   .media-header { display: block; }
   .segmented { margin: 8px 0; width: fit-content; }
