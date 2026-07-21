@@ -130,6 +130,16 @@ textarea:focus, input:focus, select:focus, button:focus-visible { border-color: 
 
 #toast { position: fixed; z-index: 20; left: 50%; bottom: 28px; transform: translate(-50%, 30px); padding: 10px 16px; border: 1px solid #353b3e; border-radius: 5px; background: #3e4649; color: white; font-size: 12px; opacity: 0; pointer-events: none; transition: .25s; }
 #toast.show { opacity: 1; transform: translate(-50%, 0); }
+.project-editor[hidden] { display: none; }
+.project-editor { position: fixed; z-index: 30; inset: 0; display: grid; place-items: center; padding: 18px; background: rgb(25 29 31 / 55%); }
+.project-editor-card { width: min(420px, 100%); padding: 22px; border: 1px solid #bfc0bc; border-radius: 7px; background: var(--white); }
+.project-editor-card h2 { margin: 0 0 18px; font-size: 18px; }
+.project-editor-card label { display: grid; gap: 7px; color: var(--ink); font-size: 12px; font-weight: 650; }
+.project-editor-card p { min-height: 18px; margin: 12px 0; color: var(--muted); font-size: 12px; }
+.project-editor-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.project-editor-actions button { min-height: 36px; padding: 0 13px; border: 1px solid #c4c5c1; border-radius: 5px; background: var(--white); color: var(--ink); }
+.project-editor-actions #confirmProjectEdit { border-color: #455c66; background: var(--accent); color: white; }
+.project-editor-actions #confirmProjectEdit.danger { border-color: #743f3b; background: var(--danger); }
 
 @media (max-width: 1050px) {
   .workspace { grid-template-columns: 210px 1fr; }
@@ -206,4 +216,6 @@ textarea:focus, input:focus, select:focus, button:focus-visible { border-color: 
   .preview-choice { color: #c7c9c8; }
   .finish-bar strong { color: #dedfdd; }
   .finish-bar .secondary { border-color: #555a5c; background: #292c2e; color: #d8dad9; }
+  .project-editor-card { border-color: #555a5c; background: #292c2e; }
+  .project-editor-actions button { border-color: #555a5c; background: #303437; color: #e0e2e1; }
 }

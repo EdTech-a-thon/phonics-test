@@ -160,10 +160,46 @@ app.innerHTML = `
 
   <input id="importInput" class="visually-hidden" type="file" accept=".html,text/html" />
 
+  <section id="projectEditor" class="project-editor" hidden aria-labelledby="projectEditorTitle">
+    <div class="project-editor-card">
+      <h2 id="projectEditorTitle">Project</h2>
+      <label id="projectNameField">Project name<input id="projectNameInput" type="text" /></label>
+      <p id="projectEditorMessage"></p>
+      <div class="project-editor-actions">
+        <button id="cancelProjectEdit" type="button">Cancel</button>
+        <button id="confirmProjectEdit" type="button">Save</button>
+      </div>
+    </div>
+  </section>
+
   <div id="toast" role="status"></div>
 `;
 
 const $ = <T extends HTMLElement>(selector: string) => document.querySelector<T>(selector)!;
+let projectEditorAction: "new" | "rename" | "delete" | null = null;
+
+function openProjectEditor(action: "new" | "rename" | "delete") {
+  const project = projects.find((item) => item.id === activeProjectId)!;
+  projectEditorAction = action;
+  $("#projectEditorTitle").textContent = action === "new" ? "New project" : action === "rename" ? "Rename project" : "Delete project";
+  $("#projectNameField").hidden = action === "delete";
+  $("#projectEditorMessage").textContent = action === "delete" ? `Delete “${project.name}”? This cannot be undone.` : "";
+  $<HTMLInputElement>("#projectNameInput").value = action === "new" ? "Untitled test" : project.name;
+  $("#confirmProjectEdit").textContent = action === "delete" ? "Delete project" : action === "new" ? "Create project" : "Save name";
+  $("#confirmProjectEdit").classList.toggle("danger", action === "delete");
+  $("#projectEditor").hidden = false;
+  if (action !== "delete") {
+    $<HTMLInputElement>("#projectNameInput").focus();
+    $<HTMLInputElement>("#projectNameInput").select();
+  } else {
+    $("#confirmProjectEdit").focus();
+  }
+}
+
+function closeProjectEditor() {
+  $("#projectEditor").hidden = true;
+  projectEditorAction = null;
+}
 
 function selectedQuestion() {
   return questions.find((question) => question.id === selectedId) ?? questions[0];
@@ -629,36 +665,46 @@ $("#projectSelect").addEventListener("change", async (event) => {
   await loadAssets();
   render();
 });
-$("#newProject").addEventListener("click", async () => {
-  const name = window.prompt("Project name", "Untitled test")?.trim();
-  if (!name) return;
-  const id = crypto.randomUUID();
-  const question: Question = { id: 1, prompt: "", choices: ["", "", "", ""], correct: 0, correctChoices: [0], responseType: "choice", textAnswer: "", gradingMode: "lenient", mediaType: "none", mediaUrl: "", required: true };
-  projects.push({ id, name, questions: [question] });
-  activeProjectId = id;
-  questions = [question];
-  selectedId = 1;
-  nextId = 2;
-  save();
-  await loadAssets();
-  render();
-});
-$("#renameProject").addEventListener("click", () => {
-  const project = projects.find((item) => item.id === activeProjectId)!;
-  const name = window.prompt("Project name", project.name)?.trim();
-  if (!name) return;
-  project.name = name;
-  save();
-  render();
-});
-$("#deleteProject").addEventListener("click", async () => {
+$("#newProject").addEventListener("click", () => openProjectEditor("new"));
+$("#renameProject").addEventListener("click", () => openProjectEditor("rename"));
+$("#deleteProject").addEventListener("click", () => {
   if (projects.length === 1) return showToast("Keep at least one project");
-  const project = projects.find((item) => item.id === activeProjectId)!;
-  if (!window.confirm(`Delete “${project.name}”?`)) return;
-  projects = projects.filter((item) => item.id !== activeProjectId);
-  activeProjectId = projects[0].id;
-  questions = projects[0].questions;
-  selectedId = questions[0].id;
+  openProjectEditor("delete");
+});
+$("#cancelProjectEdit").addEventListener("click", closeProjectEditor);
+$("#projectEditor").addEventListener("click", (event) => {
+  if (event.target === $("#projectEditor")) closeProjectEditor();
+});
+$("#projectNameInput").addEventListener("keydown", (event) => {
+  if (event.key === "Enter") $("#confirmProjectEdit").click();
+  if (event.key === "Escape") closeProjectEditor();
+});
+$("#confirmProjectEdit").addEventListener("click", async () => {
+  if (!projectEditorAction) return;
+  if (projectEditorAction === "delete") {
+    projects = projects.filter((item) => item.id !== activeProjectId);
+    activeProjectId = projects[0].id;
+    questions = projects[0].questions;
+    selectedId = questions[0].id;
+  } else {
+    const name = $<HTMLInputElement>("#projectNameInput").value.trim();
+    if (!name) {
+      $("#projectEditorMessage").textContent = "Enter a project name.";
+      return;
+    }
+    if (projectEditorAction === "new") {
+      const id = crypto.randomUUID();
+      const question: Question = { id: 1, prompt: "", choices: ["", "", "", ""], correct: 0, correctChoices: [0], responseType: "choice", textAnswer: "", gradingMode: "lenient", mediaType: "none", mediaUrl: "", required: true };
+      projects.push({ id, name, questions: [question] });
+      activeProjectId = id;
+      questions = [question];
+      selectedId = 1;
+      nextId = 2;
+    } else {
+      projects.find((item) => item.id === activeProjectId)!.name = name;
+    }
+  }
+  closeProjectEditor();
   save();
   await loadAssets();
   render();

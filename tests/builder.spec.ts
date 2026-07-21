@@ -10,6 +10,12 @@ test.beforeEach(async ({ page }) => {
   await page.reload();
 });
 
+async function createProject(page: import("@playwright/test").Page, name: string) {
+  await page.getByRole("button", { name: /New project/ }).click();
+  await page.getByLabel("Project name").fill(name);
+  await page.getByRole("button", { name: "Create project" }).click();
+}
+
 test("correct answer selection keeps the choice input focused", async ({ page }) => {
   await page.locator('button[data-correct="1"]').click();
   const choice = page.locator('input[data-choice="1"]');
@@ -42,7 +48,7 @@ test("image title opens the file chooser directly and accepts a file", async ({ 
   await chooser.setFiles({ name: "sample.svg", mimeType: "image/svg+xml", buffer: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="100" height="60"><rect width="100" height="60" fill="#789"/></svg>') });
 
   await expect(page.getByRole("button", { name: /Selected question image/ })).toBeVisible();
-  await expect(page.locator("dialog")).toHaveCount(0);
+  await expect(page.locator("#projectEditor")).toBeHidden();
 });
 
 test("images can be added by drag and drop", async ({ page }) => {
@@ -68,8 +74,7 @@ test("audio can be recorded, previewed, and retained after reload", async ({ pag
 });
 
 test("projects can be created and remain after reload", async ({ page }) => {
-  page.once("dialog", (dialog) => dialog.accept("Spelling check"));
-  await page.getByRole("button", { name: /New project/ }).click();
+  await createProject(page, "Spelling check");
   await expect(page.locator("#projectSelect")).toHaveValue(/.+/);
   await expect(page.locator("#projectSelect option:checked")).toHaveText("Spelling check");
   await page.reload();
@@ -77,16 +82,16 @@ test("projects can be created and remain after reload", async ({ page }) => {
 });
 
 test("projects can be renamed, switched, and deleted", async ({ page }) => {
-  page.once("dialog", (dialog) => dialog.accept("First name"));
-  await page.getByRole("button", { name: /New project/ }).click();
-  page.once("dialog", (dialog) => dialog.accept("Renamed test"));
+  await createProject(page, "First name");
   await page.getByRole("button", { name: "Rename project" }).click();
+  await page.getByLabel("Project name").fill("Renamed test");
+  await page.getByRole("button", { name: "Save name" }).click();
   await expect(page.locator("#projectSelect option:checked")).toHaveText("Renamed test");
   await page.locator("#projectSelect").selectOption("demo");
   await expect(page.locator(".question-row")).toHaveCount(3);
   await page.locator("#projectSelect").selectOption({ label: "Renamed test" });
-  page.once("dialog", (dialog) => dialog.accept());
   await page.getByRole("button", { name: "Delete project" }).click();
+  await page.locator("#projectEditor").getByRole("button", { name: "Delete project" }).click();
   await expect(page.locator("#projectSelect option")).toHaveCount(1);
   await expect(page.locator("#projectSelect option:checked")).toHaveText("Demo project");
 });
@@ -112,8 +117,7 @@ test("multiple choice options can be added and removed", async ({ page }) => {
 });
 
 test("downloaded test grades lenient written answers", async ({ page, context }) => {
-  page.once("dialog", (dialog) => dialog.accept("Written response test"));
-  await page.getByRole("button", { name: /New project/ }).click();
+  await createProject(page, "Written response test");
   await page.getByPlaceholder("Add instructions or a question").fill("Name the capital of France");
   await page.getByRole("button", { name: "Text answer", exact: true }).click();
   await page.getByPlaceholder("Enter the answer students should give").fill("Paris");
@@ -152,8 +156,7 @@ test("downloaded multiple choice test grades answers and can retry", async ({ pa
 });
 
 test("student progress and submitted results persist across refreshes", async ({ page, context }) => {
-  page.once("dialog", (dialog) => dialog.accept("Progress test"));
-  await page.getByRole("button", { name: /New project/ }).click();
+  await createProject(page, "Progress test");
   await page.getByPlaceholder("Add instructions or a question").fill("Capital of France");
   await page.getByRole("button", { name: "Text answer", exact: true }).click();
   await page.getByPlaceholder("Enter the answer students should give").fill("Paris");
@@ -182,8 +185,7 @@ test("student progress and submitted results persist across refreshes", async ({
 });
 
 test("required and optional questions behave correctly", async ({ page, context }) => {
-  page.once("dialog", (dialog) => dialog.accept("Optional test"));
-  await page.getByRole("button", { name: /New project/ }).click();
+  await createProject(page, "Optional test");
   await page.getByPlaceholder("Add instructions or a question").fill("Optional question");
   const choices = page.locator("input[data-choice]");
   await choices.nth(0).fill("Yes");
@@ -202,8 +204,7 @@ test("required and optional questions behave correctly", async ({ page, context 
 });
 
 test("downloaded test enforces exact written answers", async ({ page, context }) => {
-  page.once("dialog", (dialog) => dialog.accept("Exact response test"));
-  await page.getByRole("button", { name: /New project/ }).click();
+  await createProject(page, "Exact response test");
   await page.getByPlaceholder("Add instructions or a question").fill("Type the code exactly");
   await page.getByRole("button", { name: "Text answer", exact: true }).click();
   await page.getByPlaceholder("Enter the answer students should give").fill("ABC 123");
@@ -220,8 +221,7 @@ test("downloaded test enforces exact written answers", async ({ page, context })
 });
 
 test("select all questions require the complete answer set", async ({ page, context }) => {
-  page.once("dialog", (dialog) => dialog.accept("Multiple answer test"));
-  await page.getByRole("button", { name: /New project/ }).click();
+  await createProject(page, "Multiple answer test");
   await page.getByPlaceholder("Add instructions or a question").fill("Select the vowels");
   await page.getByRole("button", { name: "Select all", exact: true }).click();
   const choices = page.locator("input[data-choice]");
@@ -242,8 +242,7 @@ test("select all questions require the complete answer set", async ({ page, cont
 });
 
 test("select all questions reject missing or extra selections", async ({ page, context }) => {
-  page.once("dialog", (dialog) => dialog.accept("Select all grading"));
-  await page.getByRole("button", { name: /New project/ }).click();
+  await createProject(page, "Select all grading");
   await page.getByPlaceholder("Add instructions or a question").fill("Select A and C");
   await page.getByRole("button", { name: "Select all", exact: true }).click();
   const choices = page.locator("input[data-choice]");
@@ -284,8 +283,7 @@ test("downloaded tests can be imported as editable projects", async ({ page }) =
 });
 
 test("embedded images survive download and re-import", async ({ page }) => {
-  page.once("dialog", (dialog) => dialog.accept("Image round trip"));
-  await page.getByRole("button", { name: /New project/ }).click();
+  await createProject(page, "Image round trip");
   await page.getByPlaceholder("Add instructions or a question").fill("Identify this color");
   await page.getByRole("button", { name: "Picture", exact: true }).click();
   const imageChooser = page.waitForEvent("filechooser");
@@ -344,8 +342,7 @@ test("downloaded tests respect dark mode", async ({ page, context }) => {
 });
 
 test("incomplete answer keys cannot be downloaded", async ({ page }) => {
-  page.once("dialog", (dialog) => dialog.accept("Incomplete test"));
-  await page.getByRole("button", { name: /New project/ }).click();
+  await createProject(page, "Incomplete test");
   await page.getByPlaceholder("Add instructions or a question").fill("An unfinished question");
   const download = page.waitForEvent("download", { timeout: 800 }).then(() => true).catch(() => false);
   await page.getByRole("button", { name: "Download test" }).click();
