@@ -82,8 +82,8 @@ app.innerHTML = `
     <div class="project-controls">
       <select id="projectSelect" aria-label="Current project"></select>
       <button id="newProject">+ New project</button>
-      <button id="renameProject">Rename</button>
-      <button id="deleteProject">Delete</button>
+      <button id="renameProject">Rename project</button>
+      <button id="deleteProject">Delete project</button>
     </div>
     <div class="top-actions">
       <span class="save-state">Saved locally</span>
@@ -105,8 +105,8 @@ app.innerHTML = `
         <div class="editor-topline">
           <span id="editorNumber">QUESTION 01</span>
           <div>
-            <button class="mini-button" id="duplicateButton">Duplicate</button>
-            <button class="mini-button danger" id="deleteButton">Delete</button>
+            <button class="mini-button" id="duplicateButton">Duplicate question</button>
+            <button class="mini-button danger" id="deleteButton">Delete question</button>
           </div>
         </div>
         <div class="question-title-box">
@@ -195,6 +195,11 @@ async function storeAsset(type: "audio" | "image", id: number, blob: Blob | null
   const store = transaction.objectStore("recordings");
   if (blob) store.put(blob, assetKey(type, id));
   else store.delete(assetKey(type, id));
+  await new Promise<void>((resolve, reject) => {
+    transaction.addEventListener("complete", () => resolve());
+    transaction.addEventListener("error", () => reject(transaction.error));
+    transaction.addEventListener("abort", () => reject(transaction.error));
+  });
 }
 
 async function loadAssets() {
@@ -330,13 +335,13 @@ async function toggleRecording(question: Question) {
     const chunks: Blob[] = [];
     mediaRecorder = new MediaRecorder(stream);
     mediaRecorder.addEventListener("dataavailable", (event) => chunks.push(event.data));
-    mediaRecorder.addEventListener("stop", () => {
+    mediaRecorder.addEventListener("stop", async () => {
       const blob = new Blob(chunks, { type: mediaRecorder?.mimeType || "audio/webm" });
       const oldUrl = audioObjectUrls.get(question.id);
       if (oldUrl) URL.revokeObjectURL(oldUrl);
       audioRecordings.set(question.id, blob);
       audioObjectUrls.set(question.id, URL.createObjectURL(blob));
-      void storeAsset("audio", question.id, blob);
+      await storeAsset("audio", question.id, blob);
       stream.getTracks().forEach((track) => track.stop());
       mediaRecorder = null;
       render();
