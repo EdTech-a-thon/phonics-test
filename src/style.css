@@ -35,8 +35,6 @@ button { cursor: pointer; }
 .save-state { color: #707570; font-size: 12px; }
 .save-state i { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #49a979; margin-right: 7px; }
 .text-button { border: 0; background: transparent; color: #4f5551; font-size: 13px; }
-.google-button { border: 1px solid #cfd2cd; border-radius: 6px; background: white; padding: 10px 15px; font-size: 13px; font-weight: 600; box-shadow: 0 1px 2px #0000000a; }
-.google-button span { color: #4285f4; font-weight: 800; margin-right: 8px; }
 
 main { max-width: 1510px; margin: auto; padding: 28px clamp(20px, 4vw, 70px) 50px; }
 .eyebrow, .panel-heading span, .editor-topline > span, .field-label, .preview-heading span { color: var(--green); font-size: 10px; font-weight: 800; letter-spacing: 1.8px; }
@@ -63,7 +61,7 @@ main { max-width: 1510px; margin: auto; padding: 28px clamp(20px, 4vw, 70px) 50p
 .mini-button.danger { color: #b96b59; }
 .field-label { display: block; margin-bottom: 8px; }
 .field-label span { color: #9a9e98; font-size: 8px; margin-left: 7px; }
-textarea, input[type="url"], #endpoint { width: 100%; border: 1px solid #d4d6cf; border-radius: 4px; background: white; color: var(--ink); padding: 12px 13px; outline: none; }
+textarea, input[type="url"] { width: 100%; border: 1px solid #d4d6cf; border-radius: 4px; background: white; color: var(--ink); padding: 12px 13px; outline: none; }
 textarea:focus, input:focus { border-color: #6f9e8b; box-shadow: 0 0 0 3px #d8eee4aa; }
 #prompt { min-height: 65px; resize: vertical; font: 600 15px/1.45 "Manrope"; }
 .media-header, .answers-heading { display: flex; justify-content: space-between; align-items: end; margin-top: 24px; }
@@ -143,12 +141,8 @@ dialog::backdrop { background: #17251f99; backdrop-filter: blur(3px); }
 .dialog-card textarea { margin-top: 12px; resize: vertical; font: 12px/1.6 monospace; }
 .dialog-close { position: absolute; top: 17px; right: 18px; border: 0; background: transparent; color: #777; font-size: 25px; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
-.dialog-actions button, .connect-actions button, .connect-actions a { padding: 10px 14px; border: 1px solid #d0d3cc; border-radius: 4px; background: white; color: #555c57; font-size: 11px; text-decoration: none; }
+.dialog-actions button { padding: 10px 14px; border: 1px solid #d0d3cc; border-radius: 4px; background: white; color: #555c57; font-size: 11px; text-decoration: none; }
 .dialog-actions button:last-child { border-color: var(--green); background: var(--green); color: white; }
-.connect-card ol { padding-left: 20px; color: #535955; font-size: 12px; line-height: 2; }
-.connect-actions { display: flex; gap: 10px; margin: 18px 0 25px; }
-.connect-actions a { background: var(--green); color: white; border-color: var(--green); }
-.audio-callout { padding: 11px 13px; border-left: 3px solid var(--orange); background: #fff4e9; font-size: 11px !important; }
 #toast { position: fixed; z-index: 20; left: 50%; bottom: 28px; transform: translate(-50%, 30px); padding: 11px 17px; border-radius: 5px; background: #1f2926; color: white; font-size: 12px; opacity: 0; pointer-events: none; transition: .25s; box-shadow: 0 8px 24px #0003; }
 #toast.show { opacity: 1; transform: translate(-50%, 0); }
 
@@ -160,7 +154,6 @@ dialog::backdrop { background: #17251f99; backdrop-filter: blur(3px); }
 @media (max-width: 720px) {
   .topbar { height: 64px; }
   .save-state, .text-button { display: none; }
-  .google-button { padding: 8px 10px; }
   main { padding: 12px 12px 30px; }
   .workspace { display: block; }
   .question-list-panel { border-right: 0; }

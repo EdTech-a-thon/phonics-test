@@ -17,7 +17,7 @@ const sampleQuestions: Question[] = [
     choices: ["ship", "chip", "sip", "tip"],
     correct: 0,
     mediaType: "audio",
-    mediaUrl: "https://drive.google.com/file/d/example-audio/view",
+    mediaUrl: "",
     required: true,
   },
   {
@@ -55,7 +55,6 @@ app.innerHTML = `
     <div class="top-actions">
       <span class="save-state"><i></i> Saved on this device</span>
       <button class="text-button" id="helpButton">How it works</button>
-      <button class="google-button" id="connectButton"><span>G</span> Connect Google</button>
     </div>
   </header>
   <main>
@@ -118,9 +117,9 @@ app.innerHTML = `
     </section>
 
     <section class="finish-bar">
-      <div><span id="readyDot"></span><strong id="readyText">All 3 questions are ready</strong><small>Pictures and audio players are embedded in the student form.</small></div>
+      <div><span id="readyDot"></span><strong id="readyText">All 3 questions are ready</strong><small>Everything is packaged into one test file.</small></div>
       <button class="secondary" id="copyButton">Copy question list</button>
-      <button class="primary" id="createButton">Publish student form <span>↗</span></button>
+      <button class="primary" id="createButton">Download test HTML <span>↓</span></button>
     </section>
   </main>
 
@@ -133,21 +132,6 @@ app.innerHTML = `
       <textarea id="bulkText" rows="12">Which animal sleeps during the day?\nA) Robin\n*B) Owl\nC) Butterfly\nD) Squirrel\n\nWhat sound does “ship” begin with?\n*A) sh\nB) ch\nC) s\nD) t</textarea>
       <div class="dialog-actions"><button value="cancel">Cancel</button><button value="default" id="importButton">Import questions</button></div>
     </form>
-  </dialog>
-
-  <dialog id="connectDialog">
-    <div class="dialog-card connect-card">
-      <button class="dialog-close" id="closeConnect" aria-label="Close">×</button>
-      <p class="eyebrow">ONE-TIME CONNECTION</p>
-      <h2>Connect Google Drive & Sheets</h2>
-      <p>This prototype uses a small Google Apps Script in your account. It saves recordings in Drive, collects answers in Sheets, and hosts the student form.</p>
-      <ol><li>Open Apps Script and create a new project.</li><li>Paste in the helper code below, then deploy it as a web app.</li><li>Paste the web app address here.</li></ol>
-      <div class="connect-actions"><a href="https://script.google.com/home/start" target="_blank">Open Apps Script ↗</a><button id="copyScript">Copy helper code</button></div>
-      <label class="field-label" for="endpoint">YOUR WEB APP ADDRESS</label>
-      <input id="endpoint" type="url" placeholder="https://script.google.com/macros/s/.../exec" />
-      <p class="audio-callout"><b>Why a custom form?</b> Native Google Forms cannot embed audio. The published student form looks and behaves like a simple quiz, but includes an audio player and sends every response to your Google Sheet.</p>
-      <div class="dialog-actions"><button id="cancelConnect">Cancel</button><button id="saveConnect">Save connection</button></div>
-    </div>
   </dialog>
 
   <div id="toast" role="status"></div>
@@ -247,7 +231,7 @@ function renderMediaField(question: Question) {
     field.innerHTML = `
       <div class="audio-recorder">
         <button id="recordButton" class="record-button"><i></i><span>${recordingUrl ? "Record again" : "Start recording"}</span></button>
-        <div class="recording-status"><strong>${recordingUrl ? "Recording ready" : "Use your microphone"}</strong><small>${recordingUrl ? "It will be saved to Google Drive when published." : "You can listen before publishing."}</small></div>
+        <div class="recording-status"><strong>${recordingUrl ? "Recording ready" : "Use your microphone"}</strong><small>${recordingUrl ? "It will be embedded in the downloaded test." : "You can listen before downloading."}</small></div>
         ${recordingUrl ? `<audio controls src="${escapeAttribute(recordingUrl)}"></audio>` : ""}
       </div>
       <div class="or-divider"><span>or use an existing shared audio link</span></div>
@@ -359,67 +343,35 @@ function parseQuestions(text: string): Question[] {
   });
 }
 
-function questionPayload() {
-  return questions.map((question) => ({
-    id: question.id,
-    title: question.prompt,
-    choices: question.choices,
-    correct: question.choices[question.correct],
-    required: question.required,
-    imageUrl: question.mediaType === "image" ? question.mediaUrl : "",
-    audioUrl: question.mediaType === "audio" ? question.mediaUrl : "",
-  }));
-}
-
-function blobToBase64(blob: Blob) {
+function blobToDataUrl(blob: Blob) {
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
-    reader.addEventListener("load", () => resolve(String(reader.result).split(",")[1]));
+    reader.addEventListener("load", () => resolve(String(reader.result)));
     reader.addEventListener("error", () => reject(reader.error));
     reader.readAsDataURL(blob);
   });
 }
 
-const helperScript = `function doPost(e) {
-  var data = JSON.parse(e.postData.contents);
-  var token = Utilities.getUuid();
-  var folder = DriveApp.createFolder((data.title || 'Audio quiz') + ' files');
-  var sheet = SpreadsheetApp.create((data.title || 'Audio quiz') + ' responses');
-  var questions = data.questions.map(function(q) {
-    var recording = data.recordings[String(q.id)];
-    if (recording) {
-      var bytes = Utilities.base64Decode(recording.data);
-      var file = folder.createFile(Utilities.newBlob(bytes, recording.type, 'question-' + q.id + '.webm'));
-      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-      q.audioUrl = 'https://drive.google.com/uc?export=download&id=' + file.getId();
-    }
-    return q;
-  });
-  sheet.getSheets()[0].appendRow(['Submitted at'].concat(questions.map(function(q) { return q.title; })));
-  PropertiesService.getScriptProperties().setProperty(token, JSON.stringify({
-    title: data.title || 'Audio quiz', questions: questions, sheetId: sheet.getId()
-  }));
-  return ContentService.createTextOutput(JSON.stringify({
-    studentUrl: ScriptApp.getService().getUrl() + '?form=' + token,
-    sheetUrl: sheet.getUrl()
-  })).setMimeType(ContentService.MimeType.JSON);
-}
+async function createTestHtml() {
+  const testQuestions = await Promise.all(questions.map(async (question) => ({
+    prompt: question.prompt,
+    choices: question.choices,
+    correct: question.correct,
+    required: question.required,
+    imageUrl: question.mediaType === "image" ? question.mediaUrl : "",
+    audioUrl: question.mediaType === "audio" && audioRecordings.has(question.id)
+      ? await blobToDataUrl(audioRecordings.get(question.id)!)
+      : question.mediaType === "audio" ? question.mediaUrl : "",
+  })));
+  const safeData = JSON.stringify({ title: "Audio Quiz", questions: testQuestions }).replace(/</g, "\\u003c");
 
-function doGet(e) {
-  var config = JSON.parse(PropertiesService.getScriptProperties().getProperty(e.parameter.form) || 'null');
-  if (!config) return HtmlService.createHtmlOutput('<h1>Form not found</h1>');
-  var safeData = JSON.stringify({ token: e.parameter.form, title: config.title, questions: config.questions }).replace(/</g, '\\u003c');
-  var html = '<!doctype html><html><head><meta name="viewport" content="width=device-width"><style>' +
-    'body{margin:0;background:#f4f3ee;color:#25302c;font:16px Arial,sans-serif}.wrap{max-width:700px;margin:32px auto;padding:0 16px}header,.card{background:white;border-radius:8px;padding:26px;margin-bottom:16px;border-top:7px solid #176b52;box-shadow:0 5px 20px #0000000d}h1{margin:0 0 8px}.card{border-top:0}img{max-width:100%;max-height:360px;border-radius:5px}audio{width:100%;margin:14px 0}.choice{display:block;padding:11px;border:1px solid #ddd;border-radius:5px;margin:8px 0}button{background:#176b52;color:white;border:0;border-radius:5px;padding:13px 24px;font-weight:bold}#thanks{display:none}</style></head>' +
-    '<body><main class="wrap"><header><h1 id="title"></h1><p>Listen carefully and choose an answer.</p></header><form id="quiz"></form><div id="thanks"><header><h1>Response received</h1><p>Your answers have been saved.</p></header></div></main><script>var data=' + safeData + ';' +
-    'document.getElementById("title").textContent=data.title;var quiz=document.getElementById("quiz");data.questions.forEach(function(q,i){var card=document.createElement("section");card.className="card";var h=document.createElement("h3");h.textContent=(i+1)+". "+q.title;card.appendChild(h);if(q.imageUrl){var img=document.createElement("img");img.src=q.imageUrl;img.alt="Question image";card.appendChild(img)}if(q.audioUrl){var audio=document.createElement("audio");audio.controls=true;audio.preload="metadata";audio.src=q.audioUrl;card.appendChild(audio)}q.choices.forEach(function(c){var label=document.createElement("label");label.className="choice";var input=document.createElement("input");input.type="radio";input.name="q"+i;input.value=c;input.required=q.required;label.appendChild(input);label.appendChild(document.createTextNode(" "+c));card.appendChild(label)});quiz.appendChild(card)});var button=document.createElement("button");button.type="submit";button.textContent="Submit answers";quiz.appendChild(button);quiz.onsubmit=function(e){e.preventDefault();button.disabled=true;button.textContent="Saving...";var answers=data.questions.map(function(q,i){var picked=document.querySelector("input[name=q"+i+"]:checked");return picked?picked.value:""});google.script.run.withSuccessHandler(function(){quiz.style.display="none";document.getElementById("thanks").style.display="block"}).saveResponse(data.token,answers)};</script></body></html>';
-  return HtmlService.createHtmlOutput(html).setTitle(config.title);
+  return `<!doctype html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Audio Quiz</title><style>
+*{box-sizing:border-box}body{margin:0;background:#f4f3ee;color:#25302c;font:16px Arial,sans-serif}.wrap{max-width:720px;margin:34px auto;padding:0 16px 50px}header,.card,.results{background:#fff;border-radius:8px;padding:26px;margin-bottom:16px;box-shadow:0 5px 20px #0000000d}header{border-top:8px solid #176b52}h1{margin:0 0 8px}h3{margin-top:0}p{color:#66706b}.card.missed{border-left:5px solid #b74c3e}.card.correct{border-left:5px solid #25805e}img{display:block;max-width:100%;max-height:360px;border-radius:5px;margin:15px 0}audio{width:100%;margin:12px 0}.choice{display:block;padding:12px;border:1px solid #d9dcd8;border-radius:5px;margin:8px 0;cursor:pointer}.choice:has(input:checked){border-color:#176b52;background:#edf6f1}button{background:#176b52;color:#fff;border:0;border-radius:5px;padding:13px 24px;font-weight:bold;cursor:pointer}.results{display:none;text-align:center}.score{color:#176b52;font-size:54px;font-weight:bold;margin:8px}.review{font-size:14px;text-align:left}.answer{font-weight:bold}.wrong{color:#a43f33}.right{color:#176b52}@media(max-width:600px){.wrap{margin:12px auto}header,.card,.results{padding:20px}}
+</style></head><body><main class="wrap"><header><h1 id="title"></h1><p>Choose the best answer for each question, then submit to see your score.</p></header><form id="quiz"></form><section class="results" id="results"><p>YOUR SCORE</p><div class="score" id="score"></div><h2 id="message"></h2><div class="review" id="review"></div><button id="retry" type="button">Try again</button></section></main>
+<script>const data=${safeData};const quiz=document.getElementById('quiz');document.getElementById('title').textContent=data.title;data.questions.forEach((q,i)=>{const card=document.createElement('section');card.className='card';card.id='question-'+i;const heading=document.createElement('h3');heading.textContent=(i+1)+'. '+q.prompt;card.append(heading);if(q.imageUrl){const image=document.createElement('img');image.src=q.imageUrl;image.alt='Question image';card.append(image)}if(q.audioUrl){const audio=document.createElement('audio');audio.controls=true;audio.preload='metadata';audio.src=q.audioUrl;card.append(audio)}q.choices.forEach((choice,j)=>{const label=document.createElement('label');label.className='choice';const input=document.createElement('input');input.type='radio';input.name='q'+i;input.value=String(j);input.required=q.required;label.append(input,document.createTextNode(' '+choice));card.append(label)});quiz.append(card)});const submit=document.createElement('button');submit.type='submit';submit.textContent='Grade my test';quiz.append(submit);quiz.addEventListener('submit',event=>{event.preventDefault();let correct=0;const review=document.getElementById('review');review.innerHTML='';data.questions.forEach((q,i)=>{const picked=document.querySelector('input[name=q'+i+']:checked');const answer=picked?Number(picked.value):-1;const isCorrect=answer===q.correct;if(isCorrect)correct++;const card=document.getElementById('question-'+i);card.classList.add(isCorrect?'correct':'missed');const line=document.createElement('p');line.innerHTML='<strong>'+(i+1)+'. '+q.prompt+'</strong><br><span class="'+(isCorrect?'right':'wrong')+'">'+(isCorrect?'Correct':'Your answer: '+(answer>=0?q.choices[answer]:'No answer'))+'</span>'+(isCorrect?'':'<br><span class="answer">Correct answer: '+q.choices[q.correct]+'</span>');review.append(line)});const percent=Math.round(correct/data.questions.length*100);document.getElementById('score').textContent=correct+' / '+data.questions.length;document.getElementById('message').textContent=percent>=80?'Excellent work!':percent>=60?'Good effort!':'Keep practicing!';quiz.style.display='none';document.getElementById('results').style.display='block';window.scrollTo({top:0,behavior:'smooth'})});document.getElementById('retry').addEventListener('click',()=>{quiz.reset();document.querySelectorAll('.card').forEach(card=>card.classList.remove('correct','missed'));quiz.style.display='block';document.getElementById('results').style.display='none';window.scrollTo({top:0,behavior:'smooth'})});</script></body></html>`;
 }
-
-function saveResponse(token, answers) {
-  var config = JSON.parse(PropertiesService.getScriptProperties().getProperty(token));
-  SpreadsheetApp.openById(config.sheetId).getSheets()[0].appendRow([new Date()].concat(answers));
-}`;
 
 $("#questionList").addEventListener("click", (event) => {
   const row = (event.target as HTMLElement).closest<HTMLButtonElement>(".question-row");
@@ -502,7 +454,6 @@ $("#nextButton").addEventListener("click", () => {
 });
 
 const pasteDialog = $("#pasteDialog") as HTMLDialogElement;
-const connectDialog = $("#connectDialog") as HTMLDialogElement;
 $("#pasteButton").addEventListener("click", () => pasteDialog.showModal());
 $("#importButton").addEventListener("click", () => {
   const imported = parseQuestions($<HTMLTextAreaElement>("#bulkText").value);
@@ -511,18 +462,7 @@ $("#importButton").addEventListener("click", () => {
   render();
   showToast(`${imported.length} questions imported`);
 });
-$("#connectButton").addEventListener("click", () => connectDialog.showModal());
 $("#helpButton").addEventListener("click", () => pasteDialog.showModal());
-$("#closeConnect").addEventListener("click", () => connectDialog.close());
-$("#cancelConnect").addEventListener("click", () => connectDialog.close());
-$("#copyScript").addEventListener("click", async () => { await navigator.clipboard.writeText(helperScript); showToast("Helper code copied"); });
-$("#saveConnect").addEventListener("click", () => {
-  const endpoint = $<HTMLInputElement>("#endpoint").value.trim();
-  if (!endpoint.startsWith("https://script.google.com/")) return showToast("Please use an Apps Script web app address");
-  localStorage.setItem("formflow-endpoint", endpoint);
-  connectDialog.close();
-  showToast("Google connection saved");
-});
 
 $("#copyButton").addEventListener("click", async () => {
   const text = questions.map((question, index) => `${index + 1}. ${question.prompt}\n${question.mediaUrl ? `${question.mediaType.toUpperCase()}: ${question.mediaUrl}\n` : ""}${question.choices.map((choice, choiceIndex) => `${question.correct === choiceIndex ? "*" : ""}${String.fromCharCode(65 + choiceIndex)}) ${choice}`).join("\n")}`).join("\n\n");
@@ -531,24 +471,20 @@ $("#copyButton").addEventListener("click", async () => {
 });
 
 $("#createButton").addEventListener("click", async () => {
-  const endpoint = localStorage.getItem("formflow-endpoint");
-  if (!endpoint) return connectDialog.showModal();
-  showToast("Uploading recordings and publishing...");
+  showToast("Packaging your test...");
   try {
-    const recordings: Record<string, { data: string; type: string }> = {};
-    for (const [id, blob] of audioRecordings) {
-      recordings[String(id)] = { data: await blobToBase64(blob), type: blob.type };
-    }
-    const response = await fetch(endpoint, { method: "POST", body: JSON.stringify({ title: "FormFlow audio quiz", questions: questionPayload(), recordings }) });
-    const result = await response.json() as { studentUrl?: string; sheetUrl?: string };
-    if (!result.studentUrl) throw new Error("No form address returned");
-    window.open(result.studentUrl, "_blank", "noopener,noreferrer");
-    showToast("Student form published; recordings saved to Drive");
+    const html = await createTestHtml();
+    const url = URL.createObjectURL(new Blob([html], { type: "text/html" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "audio-quiz.html";
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    showToast("Test downloaded and ready to share");
   } catch {
-    showToast("Google blocked the request. Check the web app deployment settings.");
+    showToast("The test could not be created. Please try again.");
   }
 });
 
 load();
-$<HTMLInputElement>("#endpoint").value = localStorage.getItem("formflow-endpoint") ?? "";
 loadRecordings().finally(render);
