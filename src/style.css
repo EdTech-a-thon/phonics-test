@@ -26,8 +26,9 @@ button { cursor: pointer; }
 .project-controls select { min-width: 185px; padding: 0 30px 0 10px; font-weight: 650; }
 .project-controls button { padding: 0 10px; }
 .project-controls button:hover { border-color: #999d9e; background: #f5f5f2; }
-.top-actions { margin-left: auto; }
+.top-actions { display: flex; align-items: center; gap: 12px; margin-left: auto; }
 .save-state { color: var(--muted); font-size: 12px; }
+.top-actions button { min-height: 34px; padding: 0 10px; border: 1px solid #cacac5; border-radius: 5px; background: var(--white); color: #3d4245; font-size: 12px; }
 
 main { max-width: 1480px; margin: auto; padding: 24px clamp(16px, 4vw, 60px) 45px; }
 .workspace { display: grid; grid-template-columns: 235px minmax(470px, 1fr) 330px; min-height: 690px; overflow: hidden; border: 1px solid #c8c8c3; border-radius: 7px; background: var(--panel); }
@@ -85,6 +86,7 @@ textarea:focus, input:focus, select:focus, button:focus-visible { border-color: 
 .choice-row.correct { border-color: #879da4; background: #edf2f3; }
 .radio { width: 17px; height: 17px; padding: 0; border: 1px solid #9ca1a2; border-radius: 50%; background: white; color: white; font-size: 10px; line-height: 15px; }
 .correct .radio { border-color: var(--accent); background: var(--accent); }
+.radio.checkbox-key, .preview-choice.multiple i { border-radius: 3px; }
 .choice-row input { min-width: 0; border: 0; background: transparent; color: #3e4345; font-size: 12px; outline: 0; }
 .choice-row input:focus { outline: 0; }
 .remove-choice { border: 0; background: transparent; color: #95999a; font-size: 17px; }
@@ -136,7 +138,8 @@ textarea:focus, input:focus, select:focus, button:focus-visible { border-color: 
 
 @media (max-width: 720px) {
   .topbar { flex-wrap: wrap; padding: 10px 12px; }
-  .brand, .top-actions { display: none; }
+  .brand, .save-state { display: none; }
+  .top-actions { margin-left: 0; }
   .project-controls { width: 100%; margin: 0; }
   .project-controls select { min-width: 0; flex: 1; }
   .project-controls button:not(#newProject) { display: none; }
@@ -172,6 +175,7 @@ textarea:focus, input:focus, select:focus, button:focus-visible { border-color: 
   .topbar { border-color: var(--line); background: #25282a; }
   .brand { color: #f0f1ef; }
   .project-controls select, .project-controls button { border-color: #505557; background: #303437; color: #e0e2e1; }
+  .top-actions button { border-color: #505557; background: #303437; color: #e0e2e1; }
   .project-controls button:hover { border-color: #73797b; background: #393d3f; }
   .workspace { border-color: #4b5052; background: #292c2e; }
   .question-list-panel, .preview-panel { background: #242729; }

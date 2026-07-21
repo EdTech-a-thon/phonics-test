@@ -63,7 +63,7 @@ test("downloaded test grades lenient written answers", async ({ page, context })
   await page.getByLabel(/Lenient/).check();
 
   const downloadPromise = page.waitForEvent("download");
-  await page.getByRole("button", { name: /Download test HTML/ }).click();
+  await page.getByRole("button", { name: "Download test" }).click();
   const download = await downloadPromise;
   const path = await download.path();
   expect(path).not.toBeNull();
@@ -85,7 +85,7 @@ test("downloaded test enforces exact written answers", async ({ page, context })
   await page.getByPlaceholder("Enter the answer students should give").fill("ABC 123");
   await page.getByLabel(/Exact match/).check();
   const downloadPromise = page.waitForEvent("download");
-  await page.getByRole("button", { name: /Download test HTML/ }).click();
+  await page.getByRole("button", { name: "Download test" }).click();
   const path = await (await downloadPromise).path();
   const studentPage = await context.newPage();
   await studentPage.setContent(await readFile(path!, "utf8"), { waitUntil: "domcontentloaded" });
@@ -93,6 +93,39 @@ test("downloaded test enforces exact written answers", async ({ page, context })
   await studentPage.getByRole("button", { name: "Grade my test" }).click();
   await expect(studentPage.locator("#score")).toHaveText("0 / 1");
   await expect(studentPage.getByText("Correct answer: ABC 123")).toBeVisible();
+});
+
+test("select all questions require the complete answer set", async ({ page, context }) => {
+  page.once("dialog", (dialog) => dialog.accept("Multiple answer test"));
+  await page.getByRole("button", { name: /New project/ }).click();
+  await page.getByPlaceholder("Add instructions or a question").fill("Select the vowels");
+  await page.getByRole("button", { name: "Select all", exact: true }).click();
+  const choices = page.locator("input[data-choice]");
+  await choices.nth(0).fill("A");
+  await choices.nth(1).fill("B");
+  await choices.nth(2).fill("E");
+  await choices.nth(3).fill("G");
+  await page.locator('button[data-correct="2"]').click();
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download test" }).click();
+  const path = await (await downloadPromise).path();
+  const studentPage = await context.newPage();
+  await studentPage.setContent(await readFile(path!, "utf8"), { waitUntil: "domcontentloaded" });
+  await studentPage.getByLabel("A").check();
+  await studentPage.getByLabel("E").check();
+  await studentPage.getByRole("button", { name: "Grade my test" }).click();
+  await expect(studentPage.locator("#score")).toHaveText("1 / 1");
+});
+
+test("downloaded tests can be imported as editable projects", async ({ page }) => {
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download test" }).click();
+  const path = await (await downloadPromise).path();
+  const chooserPromise = page.waitForEvent("filechooser");
+  await page.getByRole("button", { name: "Import test" }).click();
+  await (await chooserPromise).setFiles(path!);
+  await expect(page.locator("#projectSelect option:checked")).toContainText("imported");
+  await expect(page.locator(".question-row")).toHaveCount(3);
 });
 
 test("builder fits desktop and mobile without horizontal overflow", async ({ page }) => {
@@ -119,7 +152,7 @@ test("incomplete answer keys cannot be downloaded", async ({ page }) => {
   await page.getByRole("button", { name: /New project/ }).click();
   await page.getByPlaceholder("Add instructions or a question").fill("An unfinished question");
   const download = page.waitForEvent("download", { timeout: 800 }).then(() => true).catch(() => false);
-  await page.getByRole("button", { name: /Download test HTML/ }).click();
+  await page.getByRole("button", { name: "Download test" }).click();
   expect(await download).toBe(false);
   await expect(page.getByRole("status")).toContainText("Complete the question and answer key");
 });

@@ -5,7 +5,8 @@ type Question = {
   prompt: string;
   choices: string[];
   correct: number;
-  responseType: "choice" | "text";
+  responseType: "choice" | "multiple" | "text";
+  correctChoices: number[];
   textAnswer: string;
   gradingMode: "exact" | "lenient";
   mediaType: "none" | "image" | "audio";
@@ -26,6 +27,7 @@ const sampleQuestions: Question[] = [
     choices: ["ship", "chip", "sip", "tip"],
     correct: 0,
     responseType: "choice",
+    correctChoices: [0],
     textAnswer: "",
     gradingMode: "lenient",
     mediaType: "audio",
@@ -38,6 +40,7 @@ const sampleQuestions: Question[] = [
     choices: ["Owl", "Butterfly", "Squirrel", "Bee"],
     correct: 0,
     responseType: "choice",
+    correctChoices: [0],
     textAnswer: "",
     gradingMode: "lenient",
     mediaType: "image",
@@ -50,6 +53,7 @@ const sampleQuestions: Question[] = [
     choices: ["Two", "Three", "Four", "Five"],
     correct: 1,
     responseType: "choice",
+    correctChoices: [1],
     textAnswer: "",
     gradingMode: "lenient",
     mediaType: "none",
@@ -83,6 +87,7 @@ app.innerHTML = `
     </div>
     <div class="top-actions">
       <span class="save-state">Saved locally</span>
+      <button id="importTest">Import test</button>
     </div>
   </header>
   <main>
@@ -122,6 +127,7 @@ app.innerHTML = `
           <label class="field-label">Response</label>
           <div class="segmented" id="responsePicker">
             <button data-response="choice">Multiple choice</button>
+            <button data-response="multiple">Select all</button>
             <button data-response="text">Text answer</button>
           </div>
         </div>
@@ -148,9 +154,11 @@ app.innerHTML = `
 
     <section class="finish-bar">
       <div><strong id="readyText">3 questions</strong><small>The downloaded HTML file contains the complete test.</small></div>
-      <button class="primary" id="createButton">Download test HTML</button>
+      <button class="primary" id="createButton">Download test</button>
     </section>
   </main>
+
+  <input id="importInput" class="visually-hidden" type="file" accept=".html,text/html" />
 
   <div id="toast" role="status"></div>
 `;
@@ -222,6 +230,7 @@ function load() {
     if (parsed.length) {
       parsed.forEach((project) => project.questions.forEach((question) => {
         question.responseType ??= "choice";
+        question.correctChoices ??= [question.correct];
         question.textAnswer ??= "";
         question.gradingMode ??= "lenient";
         if (project.id === "demo" && question.id === 1 && !question.prompt) question.prompt = "Which word begins with the /sh/ sound?";
@@ -252,7 +261,7 @@ function render() {
   $("#questionList").innerHTML = questions.map((item, itemIndex) => `
     <button class="question-row ${item.id === selectedId ? "selected" : ""}" data-id="${item.id}">
       <span>${String(itemIndex + 1).padStart(2, "0")}</span>
-      <div><strong>${escapeHtml(item.prompt || `${item.mediaType === "none" ? "Untitled" : item.mediaType} question`)}</strong><small>${item.responseType === "text" ? "text answer" : `${item.choices.length} choices`} ${item.mediaType !== "none" ? `· ${item.mediaType}` : ""}</small></div>
+      <div><strong>${escapeHtml(item.prompt || `${item.mediaType === "none" ? "Untitled" : item.mediaType} question`)}</strong><small>${item.responseType === "text" ? "text answer" : item.responseType === "multiple" ? "select all" : `${item.choices.length} choices`} ${item.mediaType !== "none" ? `· ${item.mediaType}` : ""}</small></div>
       <i>›</i>
     </button>`).join("");
 
@@ -360,8 +369,8 @@ function renderAnswerEditor(question: Question) {
     return;
   }
   editor.innerHTML = `<div class="choices">${question.choices.map((choice, index) => `
-      <div class="choice-row ${question.correct === index ? "correct" : ""}">
-        <button class="radio" data-correct="${index}" aria-label="Mark choice ${index + 1} as correct">${question.correct === index ? "✓" : ""}</button>
+      <div class="choice-row ${question.responseType === "multiple" ? question.correctChoices.includes(index) ? "correct" : "" : question.correct === index ? "correct" : ""}">
+        <button class="radio ${question.responseType === "multiple" ? "checkbox-key" : ""}" data-correct="${index}" aria-label="Mark choice ${index + 1} as correct">${question.responseType === "multiple" ? question.correctChoices.includes(index) ? "✓" : "" : question.correct === index ? "✓" : ""}</button>
         <input data-choice="${index}" value="${escapeAttribute(choice)}" aria-label="Choice ${index + 1}" />
         <button class="remove-choice" data-remove="${index}" aria-label="Remove choice">×</button>
       </div>`).join("")}</div><button id="addChoice" class="add-choice">+ Add another choice</button>`;
@@ -381,7 +390,7 @@ function renderPreview(question: Question) {
   }
   $("#previewAnswer").innerHTML = question.responseType === "text"
     ? `<input class="preview-text-answer" placeholder="Type your answer" disabled />`
-    : question.choices.map((choice) => `<label class="preview-choice"><i></i>${escapeHtml(choice || "Empty choice")}</label>`).join("");
+    : question.choices.map((choice) => `<label class="preview-choice ${question.responseType === "multiple" ? "multiple" : ""}"><i></i>${escapeHtml(choice || "Empty choice")}</label>`).join("");
 }
 
 function escapeHtml(value: string) {
@@ -393,7 +402,7 @@ function escapeAttribute(value: string) {
 }
 
 function addQuestion() {
-  const question: Question = { id: nextId++, prompt: "", choices: ["", "", "", ""], correct: 0, responseType: "choice", textAnswer: "", gradingMode: "lenient", mediaType: "none", mediaUrl: "", required: true };
+  const question: Question = { id: nextId++, prompt: "", choices: ["", "", "", ""], correct: 0, correctChoices: [0], responseType: "choice", textAnswer: "", gradingMode: "lenient", mediaType: "none", mediaUrl: "", required: true };
   questions.push(question);
   selectedId = question.id;
   render();
@@ -413,7 +422,10 @@ function findIncompleteQuestion() {
       : question.mediaType === "audio" && audioRecordings.has(question.id);
     if (!question.prompt.trim() && !hasMedia) return true;
     if (question.responseType === "text") return !question.textAnswer.trim();
-    return question.choices.length < 2 || question.choices.some((choice) => !choice.trim()) || !question.choices[question.correct]?.trim();
+    if (question.choices.length < 2 || question.choices.some((choice) => !choice.trim())) return true;
+    return question.responseType === "multiple"
+      ? question.correctChoices.length === 0
+      : !question.choices[question.correct]?.trim();
   });
 }
 
@@ -431,6 +443,7 @@ async function createTestHtml() {
     prompt: question.prompt,
     choices: question.choices,
     correct: question.correct,
+    correctChoices: question.correctChoices,
     responseType: question.responseType,
     textAnswer: question.textAnswer,
     gradingMode: question.gradingMode,
@@ -444,13 +457,14 @@ async function createTestHtml() {
   })));
   const projectName = projects.find((project) => project.id === activeProjectId)?.name ?? "Test";
   const safeData = JSON.stringify({ title: projectName, questions: testQuestions }).replace(/</g, "\\u003c");
+  const projectData = JSON.stringify({ version: 1, name: projectName, questions: testQuestions }).replace(/-->/g, "--\\u003e");
 
   return `<!doctype html>
 <html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${escapeHtml(projectName)}</title><style>
+<title>${escapeHtml(projectName)}</title><!--TEST_BUILDER_DATA:${projectData}--><style>
 *{box-sizing:border-box}body{margin:0;background:#f2f1ee;color:#292c2f;font:16px Arial,sans-serif}.wrap{max-width:720px;margin:28px auto;padding:0 16px 50px}header,.card,.results{background:#fff;border:1px solid #d4d2cc;border-radius:8px;padding:24px;margin-bottom:14px}header{border-top:5px solid #536b78}h1{margin:0 0 8px}h3{margin:0 0 16px}p{color:#60656a}.question-number{margin:0 0 7px;font-size:12px;font-weight:bold;color:#6b7073}.card.missed{border-left:5px solid #9a514d}.card.correct{border-left:5px solid #567260}img{display:block;max-width:100%;max-height:360px;margin:15px 0;border-radius:4px}audio{width:100%;margin:12px 0}.choice{display:block;padding:12px;border:1px solid #d4d2cc;border-radius:5px;margin:8px 0;cursor:pointer}.choice:has(input:checked){border-color:#536b78;background:#edf1f3}.written-row{display:flex;gap:8px}.written{min-width:0;flex:1;padding:12px;border:1px solid #bcbab4;border-radius:5px;font:inherit}.dictate{white-space:nowrap;background:#fff;color:#455b66}button{background:#536b78;color:#fff;border:1px solid #455b66;border-radius:5px;padding:12px 22px;font-weight:bold;cursor:pointer}.results{display:none;text-align:center}.score{font-size:48px;font-weight:bold;margin:8px}.review{font-size:14px;text-align:left}.answer{font-weight:bold}.wrong{color:#9a514d}.right{color:#567260}@media(max-width:600px){.wrap{margin:12px auto}header,.card,.results{padding:18px}.written-row{display:grid}}@media(prefers-color-scheme:dark){body{color-scheme:dark;background:#1d2022;color:#e4e5e3}header,.card,.results{border-color:#484c4e;background:#292c2e}header{border-top-color:#91aab4}p,.question-number{color:#aeb2b3}.choice{border-color:#505557;background:#25282a}.choice:has(input:checked){border-color:#91aab4;background:#303b40}.written{border-color:#555a5c;background:#222527;color:#e6e7e5}.dictate{border-color:#68777d;background:#292c2e;color:#c4d3d8}button{border-color:#71868e;background:#607c88}.card.missed{border-left-color:#cf8983}.card.correct{border-left-color:#82a08b}.wrong{color:#e19a94}.right{color:#9ac2a6}}
 </style></head><body><main class="wrap"><header><h1 id="title"></h1><p>Answer each question, then submit to see your score.</p></header><form id="quiz"></form><section class="results" id="results"><p>Score</p><div class="score" id="score"></div><div class="review" id="review"></div><button id="retry" type="button">Try again</button></section></main>
-<script>const data=${safeData};const quiz=document.getElementById('quiz');const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;const normalize=value=>value.trim().replace(/\\s+/g,' ').toLocaleLowerCase();document.getElementById('title').textContent=data.title;data.questions.forEach((q,i)=>{const card=document.createElement('section');card.className='card';card.id='question-'+i;const number=document.createElement('p');number.className='question-number';number.textContent='Question '+(i+1);card.append(number);if(q.prompt){const heading=document.createElement('h3');heading.textContent=q.prompt;card.append(heading)}if(q.imageUrl){const image=document.createElement('img');image.src=q.imageUrl;image.alt='Question '+(i+1);card.append(image)}if(q.audioUrl){const audio=document.createElement('audio');audio.controls=true;audio.preload='metadata';audio.src=q.audioUrl;audio.setAttribute('aria-label','Question '+(i+1));card.append(audio)}if(q.responseType==='text'){const row=document.createElement('div');row.className='written-row';const input=document.createElement('input');input.type='text';input.name='q'+i;input.className='written';input.placeholder='Type your answer';input.required=q.required;row.append(input);if(SpeechRecognition){const dictate=document.createElement('button');dictate.type='button';dictate.className='dictate';dictate.textContent='Use voice';dictate.title='Speak an answer instead of typing';dictate.addEventListener('click',()=>{const recognition=new SpeechRecognition();recognition.lang=document.documentElement.lang||'en';recognition.interimResults=false;dictate.disabled=true;dictate.textContent='Listening…';recognition.addEventListener('result',event=>{input.value=event.results[0][0].transcript;input.focus()});recognition.addEventListener('end',()=>{dictate.disabled=false;dictate.textContent='Use voice'});recognition.addEventListener('error',()=>{dictate.disabled=false;dictate.textContent='Use voice'});recognition.start()});row.append(dictate)}card.append(row)}else{q.choices.forEach((choice,j)=>{const label=document.createElement('label');label.className='choice';const input=document.createElement('input');input.type='radio';input.name='q'+i;input.value=String(j);input.required=q.required;label.append(input,document.createTextNode(' '+choice));card.append(label)})}quiz.append(card)});const submit=document.createElement('button');submit.type='submit';submit.textContent='Grade my test';quiz.append(submit);quiz.addEventListener('submit',event=>{event.preventDefault();let correct=0;const review=document.getElementById('review');review.innerHTML='';data.questions.forEach((q,i)=>{let answer;let answerLabel;let expected;if(q.responseType==='text'){const input=document.querySelector('input[name=q'+i+']');answer=input.value;answerLabel=answer||'No answer';expected=q.textAnswer;var isCorrect=q.gradingMode==='exact'?answer===expected:normalize(answer)===normalize(expected)}else{const picked=document.querySelector('input[name=q'+i+']:checked');answer=picked?Number(picked.value):-1;answerLabel=answer>=0?q.choices[answer]:'No answer';expected=q.choices[q.correct];var isCorrect=answer===q.correct}if(isCorrect)correct++;const card=document.getElementById('question-'+i);card.classList.add(isCorrect?'correct':'missed');const line=document.createElement('p');const label=document.createElement('strong');label.textContent='Question '+(i+1);const result=document.createElement('span');result.className=isCorrect?'right':'wrong';result.textContent=isCorrect?'Correct':'Your answer: '+answerLabel;line.append(label,document.createElement('br'),result);if(!isCorrect){const answerLine=document.createElement('span');answerLine.className='answer';answerLine.textContent='Correct answer: '+expected;line.append(document.createElement('br'),answerLine)}review.append(line)});document.getElementById('score').textContent=correct+' / '+data.questions.length;quiz.style.display='none';document.getElementById('results').style.display='block';window.scrollTo({top:0,behavior:'smooth'})});document.getElementById('retry').addEventListener('click',()=>{quiz.reset();document.querySelectorAll('.card').forEach(card=>card.classList.remove('correct','missed'));quiz.style.display='block';document.getElementById('results').style.display='none';window.scrollTo({top:0,behavior:'smooth'})});</script></body></html>`;
+<script>const data=${safeData};const quiz=document.getElementById('quiz');const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;const normalize=value=>value.trim().replace(/\\s+/g,' ').toLocaleLowerCase();document.getElementById('title').textContent=data.title;data.questions.forEach((q,i)=>{const card=document.createElement('section');card.className='card';card.id='question-'+i;const number=document.createElement('p');number.className='question-number';number.textContent='Question '+(i+1);card.append(number);if(q.prompt){const heading=document.createElement('h3');heading.textContent=q.prompt;card.append(heading)}if(q.imageUrl){const image=document.createElement('img');image.src=q.imageUrl;image.alt='Question '+(i+1);card.append(image)}if(q.audioUrl){const audio=document.createElement('audio');audio.controls=true;audio.preload='metadata';audio.src=q.audioUrl;audio.setAttribute('aria-label','Question '+(i+1));card.append(audio)}if(q.responseType==='text'){const row=document.createElement('div');row.className='written-row';const input=document.createElement('input');input.type='text';input.name='q'+i;input.className='written';input.placeholder='Type your answer';input.required=q.required;row.append(input);if(SpeechRecognition){const dictate=document.createElement('button');dictate.type='button';dictate.className='dictate';dictate.textContent='Use voice';dictate.title='Speak an answer instead of typing';dictate.addEventListener('click',()=>{const recognition=new SpeechRecognition();recognition.lang=document.documentElement.lang||'en';recognition.interimResults=false;dictate.disabled=true;dictate.textContent='Listening…';recognition.addEventListener('result',event=>{input.value=event.results[0][0].transcript;input.focus()});recognition.addEventListener('end',()=>{dictate.disabled=false;dictate.textContent='Use voice'});recognition.addEventListener('error',()=>{dictate.disabled=false;dictate.textContent='Use voice'});recognition.start()});row.append(dictate)}card.append(row)}else{if(q.responseType==='multiple'){const note=document.createElement('p');note.className='select-note';note.textContent='Select all that apply.';card.append(note)}q.choices.forEach((choice,j)=>{const label=document.createElement('label');label.className='choice';const input=document.createElement('input');input.type=q.responseType==='multiple'?'checkbox':'radio';input.name='q'+i;input.value=String(j);input.required=q.required&&q.responseType!=='multiple';label.append(input,document.createTextNode(' '+choice));card.append(label)})}quiz.append(card)});const submit=document.createElement('button');submit.type='submit';submit.textContent='Grade my test';quiz.append(submit);quiz.addEventListener('submit',event=>{event.preventDefault();let correct=0;const review=document.getElementById('review');review.innerHTML='';data.questions.forEach((q,i)=>{let answer;let answerLabel;let expected;if(q.responseType==='text'){const input=document.querySelector('input[name=q'+i+']');answer=input.value;answerLabel=answer||'No answer';expected=q.textAnswer;var isCorrect=q.gradingMode==='exact'?answer===expected:normalize(answer)===normalize(expected)}else if(q.responseType==='multiple'){answer=[...document.querySelectorAll('input[name=q'+i+']:checked')].map(input=>Number(input.value)).sort((a,b)=>a-b);answerLabel=answer.length?answer.map(index=>q.choices[index]).join(', '):'No answer';const correctAnswers=(q.correctChoices||[]).slice().sort((a,b)=>a-b);expected=correctAnswers.map(index=>q.choices[index]).join(', ');var isCorrect=answer.length===correctAnswers.length&&answer.every((value,index)=>value===correctAnswers[index])}else{const picked=document.querySelector('input[name=q'+i+']:checked');answer=picked?Number(picked.value):-1;answerLabel=answer>=0?q.choices[answer]:'No answer';expected=q.choices[q.correct];var isCorrect=answer===q.correct}if(isCorrect)correct++;const card=document.getElementById('question-'+i);card.classList.add(isCorrect?'correct':'missed');const line=document.createElement('p');const label=document.createElement('strong');label.textContent='Question '+(i+1);const result=document.createElement('span');result.className=isCorrect?'right':'wrong';result.textContent=isCorrect?'Correct':'Your answer: '+answerLabel;line.append(label,document.createElement('br'),result);if(!isCorrect){const answerLine=document.createElement('span');answerLine.className='answer';answerLine.textContent='Correct answer: '+expected;line.append(document.createElement('br'),answerLine)}review.append(line)});document.getElementById('score').textContent=correct+' / '+data.questions.length;quiz.style.display='none';document.getElementById('results').style.display='block';window.scrollTo({top:0,behavior:'smooth'})});document.getElementById('retry').addEventListener('click',()=>{quiz.reset();document.querySelectorAll('.card').forEach(card=>card.classList.remove('correct','missed'));quiz.style.display='block';document.getElementById('results').style.display='none';window.scrollTo({top:0,behavior:'smooth'})});</script></body></html>`;
 }
 
 $("#questionList").addEventListener("click", (event) => {
@@ -498,11 +512,21 @@ $("#answerEditor").addEventListener("click", (event) => {
   const remove = (event.target as HTMLElement).closest<HTMLButtonElement>("button[data-remove]");
   const addChoiceButton = (event.target as HTMLElement).closest<HTMLButtonElement>("#addChoice");
   if (correct) {
-    selectedQuestion().correct = Number(correct.dataset.correct);
+    const question = selectedQuestion();
+    const correctIndex = Number(correct.dataset.correct);
+    if (question.responseType === "multiple") {
+      question.correctChoices = question.correctChoices.includes(correctIndex)
+        ? question.correctChoices.filter((index) => index !== correctIndex)
+        : [...question.correctChoices, correctIndex].sort((a, b) => a - b);
+    } else {
+      question.correct = correctIndex;
+      question.correctChoices = [correctIndex];
+    }
     document.querySelectorAll(".choice-row").forEach((row, index) => {
-      row.classList.toggle("correct", index === selectedQuestion().correct);
+      const isCorrect = question.responseType === "multiple" ? question.correctChoices.includes(index) : index === question.correct;
+      row.classList.toggle("correct", isCorrect);
       const button = row.querySelector<HTMLButtonElement>(".radio")!;
-      button.textContent = index === selectedQuestion().correct ? "✓" : "";
+      button.textContent = isCorrect ? "✓" : "";
     });
     save();
   }
@@ -510,6 +534,9 @@ $("#answerEditor").addEventListener("click", (event) => {
     const index = Number(remove.dataset.remove);
     selectedQuestion().choices.splice(index, 1);
     if (selectedQuestion().correct >= selectedQuestion().choices.length) selectedQuestion().correct = 0;
+    selectedQuestion().correctChoices = selectedQuestion().correctChoices
+      .filter((correctIndex) => correctIndex !== index)
+      .map((correctIndex) => correctIndex > index ? correctIndex - 1 : correctIndex);
     render();
   }
   if (addChoiceButton) {
@@ -590,7 +617,7 @@ $("#newProject").addEventListener("click", async () => {
   const name = window.prompt("Project name", "Untitled test")?.trim();
   if (!name) return;
   const id = crypto.randomUUID();
-  const question: Question = { id: 1, prompt: "", choices: ["", "", "", ""], correct: 0, responseType: "choice", textAnswer: "", gradingMode: "lenient", mediaType: "none", mediaUrl: "", required: true };
+  const question: Question = { id: 1, prompt: "", choices: ["", "", "", ""], correct: 0, correctChoices: [0], responseType: "choice", textAnswer: "", gradingMode: "lenient", mediaType: "none", mediaUrl: "", required: true };
   projects.push({ id, name, questions: [question] });
   activeProjectId = id;
   questions = [question];
@@ -620,6 +647,75 @@ $("#deleteProject").addEventListener("click", async () => {
   await loadAssets();
   render();
 });
+
+$("#importTest").addEventListener("click", () => $<HTMLInputElement>("#importInput").click());
+$("#importInput").addEventListener("change", async (event) => {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  if (!file) return;
+  try {
+    const html = await file.text();
+    const match = html.match(/<!--TEST_BUILDER_DATA:(.*?)-->/s);
+    if (!match) throw new Error("Missing project data");
+    const imported = JSON.parse(match[1]) as {
+      name?: string;
+      questions?: Array<{
+        prompt: string;
+        choices: string[];
+        correct: number;
+        correctChoices?: number[];
+        responseType: Question["responseType"];
+        textAnswer: string;
+        gradingMode: Question["gradingMode"];
+        required: boolean;
+        imageUrl: string;
+        audioUrl: string;
+      }>;
+    };
+    if (!imported.questions?.length) throw new Error("No questions");
+    const id = crypto.randomUUID();
+    const importedQuestions = imported.questions.map((question, index): Question => ({
+      id: index + 1,
+      prompt: question.prompt ?? "",
+      choices: question.choices ?? ["", ""],
+      correct: question.correct ?? 0,
+      correctChoices: question.correctChoices ?? [question.correct ?? 0],
+      responseType: question.responseType ?? "choice",
+      textAnswer: question.textAnswer ?? "",
+      gradingMode: question.gradingMode ?? "lenient",
+      mediaType: question.imageUrl ? "image" : question.audioUrl ? "audio" : "none",
+      mediaUrl: question.imageUrl?.startsWith("data:") ? "" : question.imageUrl ?? "",
+      required: question.required ?? true,
+    }));
+    projects.push({ id, name: `${imported.name || file.name.replace(/\.html?$/i, "")} (imported)`, questions: importedQuestions });
+    activeProjectId = id;
+    questions = importedQuestions;
+    selectedId = questions[0].id;
+    nextId = questions.length + 1;
+    save();
+    for (let index = 0; index < imported.questions.length; index++) {
+      const source = imported.questions[index];
+      if (source.audioUrl?.startsWith("data:")) await storeAsset("audio", index + 1, dataUrlToBlob(source.audioUrl));
+      if (source.imageUrl?.startsWith("data:")) await storeAsset("image", index + 1, dataUrlToBlob(source.imageUrl));
+    }
+    await loadAssets();
+    render();
+    showToast("Test imported as a new project");
+  } catch {
+    showToast("This file was not created by Test Builder or is damaged");
+  } finally {
+    input.value = "";
+  }
+});
+
+function dataUrlToBlob(dataUrl: string) {
+  const [metadata, data] = dataUrl.split(",");
+  const mimeType = metadata.match(/^data:([^;]+)/)?.[1] ?? "application/octet-stream";
+  const bytes = atob(data);
+  const output = new Uint8Array(bytes.length);
+  for (let index = 0; index < bytes.length; index++) output[index] = bytes.charCodeAt(index);
+  return new Blob([output], { type: mimeType });
+}
 
 $("#createButton").addEventListener("click", async () => {
   const incompleteIndex = findIncompleteQuestion();
