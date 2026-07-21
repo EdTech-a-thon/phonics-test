@@ -146,9 +146,39 @@ test("downloaded multiple choice test grades answers and can retry", async ({ pa
   await questions.nth(2).getByLabel("Three").check();
   await studentPage.getByRole("button", { name: "Grade my test" }).click();
   await expect(studentPage.locator("#score")).toHaveText("3 / 3");
-  await studentPage.getByRole("button", { name: "Try again" }).click();
+  await studentPage.getByRole("button", { name: "Restart test" }).click();
   await expect(studentPage.locator("#quiz")).toBeVisible();
   await expect(questions.nth(0).getByLabel("ship")).not.toBeChecked();
+});
+
+test("student progress and submitted results persist across refreshes", async ({ page, context }) => {
+  page.once("dialog", (dialog) => dialog.accept("Progress test"));
+  await page.getByRole("button", { name: /New project/ }).click();
+  await page.getByPlaceholder("Add instructions or a question").fill("Capital of France");
+  await page.getByRole("button", { name: "Text answer", exact: true }).click();
+  await page.getByPlaceholder("Enter the answer students should give").fill("Paris");
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download test" }).click();
+  const path = await (await downloadPromise).path();
+  const html = await readFile(path!, "utf8");
+  const studentPage = await context.newPage();
+  await studentPage.route("**/student-progress-test", (route) => route.fulfill({ contentType: "text/html", body: html }));
+  await studentPage.goto("http://127.0.0.1:8000/student-progress-test");
+  const answer = studentPage.getByPlaceholder("Type your answer");
+  await answer.fill("Paris");
+  await studentPage.reload();
+  await expect(studentPage.getByPlaceholder("Type your answer")).toHaveValue("Paris");
+  await studentPage.getByRole("button", { name: "Grade my test" }).click();
+  await expect(studentPage.locator("#score")).toHaveText("1 / 1");
+  await studentPage.reload();
+  await expect(studentPage.locator("#results")).toBeVisible();
+  await expect(studentPage.locator("#score")).toHaveText("1 / 1");
+  await studentPage.getByRole("button", { name: "Restart test" }).click();
+  await expect(studentPage.locator("#quiz")).toBeVisible();
+  await expect(studentPage.getByPlaceholder("Type your answer")).toHaveValue("");
+  await studentPage.reload();
+  await expect(studentPage.locator("#quiz")).toBeVisible();
+  await expect(studentPage.getByPlaceholder("Type your answer")).toHaveValue("");
 });
 
 test("required and optional questions behave correctly", async ({ page, context }) => {
