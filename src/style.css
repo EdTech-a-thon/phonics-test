@@ -153,3 +153,53 @@ textarea:focus, input:focus, select:focus, button:focus-visible { border-color: 
   .finish-bar button { padding: 0 8px; }
   .grading-options small { display: block; margin: 3px 0 0 22px; }
 }
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color: #e4e5e3;
+    background: #1d2022;
+    --accent: #91aab4;
+    --accent-soft: #303b40;
+    --ink: #e4e5e3;
+    --muted: #a9adae;
+    --line: #434749;
+    --panel: #292c2e;
+    --white: #25282a;
+    --danger: #d0928d;
+  }
+
+  body { color-scheme: dark; }
+  .topbar { border-color: var(--line); background: #25282a; }
+  .brand { color: #f0f1ef; }
+  .project-controls select, .project-controls button { border-color: #505557; background: #303437; color: #e0e2e1; }
+  .project-controls button:hover { border-color: #73797b; background: #393d3f; }
+  .workspace { border-color: #4b5052; background: #292c2e; }
+  .question-list-panel, .preview-panel { background: #242729; }
+  .panel-heading span, .editor-topline > span, .field-label, .preview-heading span { color: #dedfdd; }
+  .question-row { border-color: #3d4143; color: #afb2b3; }
+  .question-row:hover { background: #303437; }
+  .question-row strong { color: #d9dbda; }
+  .question-row small { color: #9da1a2; }
+  .question-row.selected { background: #344046; }
+  .editor-panel { background: #292c2e; }
+  .question-title-box, .finish-bar { border-color: #484c4e; background: #303335; }
+  textarea, input[type="text"], .choice-row, .preview-text-answer { border-color: #535759; background: #222527; color: #e6e7e5; }
+  .segmented { background: #202325; }
+  .segmented button { color: #b3b6b7; }
+  .segmented button.active { border-color: #656a6c; background: #3a3e40; color: #f0f1ef; }
+  .image-title-button { border-color: #69777c; background: #25292b; color: #b8cbd2; }
+  .image-title-button:hover, .image-title-button.dragging { background: #303b40; }
+  .audio-recorder, .embedded-audio { border-color: #506168; background: #303b40; }
+  .recording-status strong, .embedded-audio span { color: #dde1e2; }
+  .choice-row.correct { border-color: #7f969e; background: #344046; }
+  .choice-row input { color: #e3e4e2; }
+  .radio { border-color: #888e90; background: #292c2e; }
+  .grading-options { border-color: #4d5153; }
+  .grading-options legend, .grading-options label, .text-answer-field > span { color: #d3d5d4; }
+  .toggle-row, .nav-buttons button { color: #b2b5b6; }
+  .form-preview { border-color: #4c5153; background: #292c2e; }
+  #previewQuestion { color: #e3e4e2; }
+  .preview-choice { color: #c7c9c8; }
+  .finish-bar strong { color: #dedfdd; }
+  .finish-bar .secondary { border-color: #555a5c; background: #292c2e; color: #d8dad9; }
+}

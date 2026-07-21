@@ -106,6 +106,14 @@ test("builder fits desktop and mobile without horizontal overflow", async ({ pag
   await page.screenshot({ path: "/tmp/opencode/test-builder-mobile.png", fullPage: true });
 });
 
+test("builder respects the system dark mode preference", async ({ page }) => {
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.reload();
+  await expect(page.locator("body")).toHaveCSS("color-scheme", "dark");
+  await expect(page.locator(".editor-panel")).toHaveCSS("background-color", "rgb(41, 44, 46)");
+  await page.screenshot({ path: "/tmp/opencode/test-builder-dark.png", fullPage: true });
+});
+
 test("incomplete answer keys cannot be downloaded", async ({ page }) => {
   page.once("dialog", (dialog) => dialog.accept("Incomplete test"));
   await page.getByRole("button", { name: /New project/ }).click();
