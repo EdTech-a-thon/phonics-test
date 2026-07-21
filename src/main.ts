@@ -56,19 +56,6 @@ app.innerHTML = `
     </div>
   </header>
   <main>
-    <section class="hero">
-      <div>
-        <p class="eyebrow">BULK FORM BUILDER</p>
-        <h1>From messy notes to a<br><em>ready-to-share form.</em></h1>
-        <p class="lede">Paste a question list, attach pictures or audio links, and send the whole quiz to Google Forms in one go.</p>
-      </div>
-      <div class="hero-stats">
-        <strong id="questionCount">3</strong>
-        <span>questions ready</span>
-        <div><b id="imageCount">1</b> picture &nbsp;·&nbsp; <b id="audioCount">1</b> audio</div>
-      </div>
-    </section>
-
     <section class="workspace">
       <aside class="question-list-panel">
         <div class="panel-heading">
@@ -192,10 +179,7 @@ function render() {
   if (!questions.length) addQuestion();
   const question = selectedQuestion();
   const index = questions.indexOf(question);
-  $("#questionCount").textContent = String(questions.length);
   $("#panelCount").textContent = `${questions.length} total`;
-  $("#imageCount").textContent = String(questions.filter((item) => item.mediaType === "image").length);
-  $("#audioCount").textContent = String(questions.filter((item) => item.mediaType === "audio").length);
   $("#readyText").textContent = `All ${questions.length} questions are ready`;
   $("#editorNumber").textContent = `QUESTION ${String(index + 1).padStart(2, "0")}`;
 

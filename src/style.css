@@ -38,17 +38,8 @@ button { cursor: pointer; }
 .google-button { border: 1px solid #cfd2cd; border-radius: 6px; background: white; padding: 10px 15px; font-size: 13px; font-weight: 600; box-shadow: 0 1px 2px #0000000a; }
 .google-button span { color: #4285f4; font-weight: 800; margin-right: 8px; }
 
-main { max-width: 1510px; margin: auto; padding: 0 clamp(20px, 4vw, 70px) 50px; }
-.hero { min-height: 250px; display: flex; justify-content: space-between; align-items: center; padding: 35px 0 26px; }
+main { max-width: 1510px; margin: auto; padding: 28px clamp(20px, 4vw, 70px) 50px; }
 .eyebrow, .panel-heading span, .editor-topline > span, .field-label, .preview-heading span { color: var(--green); font-size: 10px; font-weight: 800; letter-spacing: 1.8px; }
-.hero h1 { margin: 12px 0; color: var(--ink); font: 700 clamp(36px, 4vw, 58px)/1.04 "Manrope", sans-serif; letter-spacing: -2.7px; }
-.hero h1 em { color: var(--green); font-style: italic; font-weight: 500; }
-.lede { max-width: 630px; margin: 0; color: #676d69; font-size: 15px; line-height: 1.6; }
-.hero-stats { min-width: 170px; padding-left: 30px; border-left: 1px solid var(--line); }
-.hero-stats strong { display: block; color: var(--green); font: 700 46px "Manrope"; line-height: 1; }
-.hero-stats > span { display: block; font-size: 12px; color: #59605c; margin: 5px 0 15px; }
-.hero-stats div { color: #858984; font-size: 10px; text-transform: uppercase; letter-spacing: .8px; }
-.hero-stats b { color: var(--ink); }
 
 .workspace { display: grid; grid-template-columns: 245px minmax(450px, 1fr) 340px; min-height: 670px; border: 1px solid #ced0c9; background: var(--cream); box-shadow: 0 18px 50px #29372e0e; }
 .question-list-panel, .preview-panel { background: #f1f1eb; }
@@ -156,10 +147,7 @@ dialog::backdrop { background: #17251f99; backdrop-filter: blur(3px); }
   .topbar { height: 64px; }
   .save-state, .text-button { display: none; }
   .google-button { padding: 8px 10px; }
-  main { padding: 0 12px 30px; }
-  .hero { min-height: 220px; align-items: end; }
-  .hero h1 { font-size: 34px; letter-spacing: -1.7px; }
-  .hero-stats { display: none; }
+  main { padding: 12px 12px 30px; }
   .workspace { display: block; }
   .question-list-panel { border-right: 0; }
   .question-list { display: flex; overflow-x: auto; }
