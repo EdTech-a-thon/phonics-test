@@ -62,7 +62,7 @@ const app = document.querySelector<HTMLDivElement>("#app")!;
 
 app.innerHTML = `
   <header class="topbar">
-    <a class="brand" href="#">Form<span>Flow</span><b>↗</b></a>
+    <a class="brand" href="#">Test Builder</a>
     <div class="project-controls">
       <select id="projectSelect" aria-label="Current project"></select>
       <button id="newProject">+ New project</button>
@@ -70,15 +70,14 @@ app.innerHTML = `
       <button id="deleteProject">Delete</button>
     </div>
     <div class="top-actions">
-      <span class="save-state"><i></i> Saved on this device</span>
-      <button class="text-button" id="helpButton">How it works</button>
+      <span class="save-state">Saved locally</span>
     </div>
   </header>
   <main>
     <section class="workspace">
       <aside class="question-list-panel">
         <div class="panel-heading">
-          <div><span>YOUR QUESTIONS</span><small id="panelCount">3 total</small></div>
+          <div><span>Questions</span><small id="panelCount">3 total</small></div>
           <button class="icon-button" id="addQuestion" aria-label="Add question">+</button>
         </div>
         <div id="questionList" class="question-list"></div>
@@ -118,7 +117,7 @@ app.innerHTML = `
       </section>
 
       <aside class="preview-panel">
-        <div class="preview-heading"><span>LIVE PREVIEW</span><b>STUDENT VIEW</b></div>
+        <div class="preview-heading"><span>Preview</span></div>
         <div class="form-preview">
           <div class="preview-accent"></div>
           <div class="preview-body">
@@ -132,7 +131,7 @@ app.innerHTML = `
     </section>
 
     <section class="finish-bar">
-      <div><span id="readyDot"></span><strong id="readyText">All 3 questions are ready</strong><small>Everything is packaged into one test file.</small></div>
+      <div><strong id="readyText">3 questions</strong><small>The downloaded HTML file contains the complete test.</small></div>
       <button class="secondary" id="copyButton">Copy question list</button>
       <button class="primary" id="createButton">Download test HTML <span>↓</span></button>
     </section>
@@ -141,7 +140,6 @@ app.innerHTML = `
   <dialog id="imageDialog">
     <div class="dialog-card image-dialog-card">
       <button class="dialog-close" id="closeImageDialog" aria-label="Close">×</button>
-      <p class="eyebrow">QUESTION IMAGE</p>
       <h2>Choose an image</h2>
       <label class="image-drop" id="imageDrop">
         <input id="imageInput" type="file" accept="image/*" />
@@ -238,8 +236,8 @@ function render() {
   const index = questions.indexOf(question);
   $("#projectSelect").innerHTML = projects.map((project) => `<option value="${escapeAttribute(project.id)}" ${project.id === activeProjectId ? "selected" : ""}>${escapeHtml(project.name)}</option>`).join("");
   $("#panelCount").textContent = `${questions.length} total`;
-  $("#readyText").textContent = `All ${questions.length} questions are ready`;
-  $("#editorNumber").textContent = `QUESTION ${String(index + 1).padStart(2, "0")}`;
+  $("#readyText").textContent = `${questions.length} question${questions.length === 1 ? "" : "s"}`;
+  $("#editorNumber").textContent = `Question ${index + 1}`;
 
   $("#questionList").innerHTML = questions.map((item, itemIndex) => `
     <button class="question-row ${item.id === selectedId ? "selected" : ""}" data-id="${item.id}">
@@ -401,7 +399,7 @@ async function createTestHtml() {
   return `<!doctype html>
 <html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${escapeHtml(projectName)}</title><style>
-*{box-sizing:border-box}body{margin:0;background:#f4f3ee;color:#25302c;font:16px Arial,sans-serif}.wrap{max-width:720px;margin:34px auto;padding:0 16px 50px}header,.card,.results{background:#fff;border-radius:8px;padding:26px;margin-bottom:16px;box-shadow:0 5px 20px #0000000d}header{border-top:8px solid #176b52}h1{margin:0 0 8px}h3{margin-top:0}p{color:#66706b}.card.missed{border-left:5px solid #b74c3e}.card.correct{border-left:5px solid #25805e}img{display:block;max-width:100%;max-height:360px;border-radius:5px;margin:15px 0}audio{width:100%;margin:12px 0}.choice{display:block;padding:12px;border:1px solid #d9dcd8;border-radius:5px;margin:8px 0;cursor:pointer}.choice:has(input:checked){border-color:#176b52;background:#edf6f1}button{background:#176b52;color:#fff;border:0;border-radius:5px;padding:13px 24px;font-weight:bold;cursor:pointer}.results{display:none;text-align:center}.score{color:#176b52;font-size:54px;font-weight:bold;margin:8px}.review{font-size:14px;text-align:left}.answer{font-weight:bold}.wrong{color:#a43f33}.right{color:#176b52}@media(max-width:600px){.wrap{margin:12px auto}header,.card,.results{padding:20px}}
+*{box-sizing:border-box}body{margin:0;background:#eee;color:#222;font:16px Arial,sans-serif}.wrap{max-width:720px;margin:24px auto;padding:0 16px 50px}header,.card,.results{background:#fff;border:1px solid #bbb;padding:24px;margin-bottom:14px}h1{margin:0 0 8px}h3{margin-top:0}p{color:#555}.card.missed{border-left:5px solid #a33}.card.correct{border-left:5px solid #276b47}img{display:block;max-width:100%;max-height:360px;margin:15px 0}audio{width:100%;margin:12px 0}.choice{display:block;padding:12px;border:1px solid #ccc;margin:8px 0;cursor:pointer}.choice:has(input:checked){border-color:#333;background:#eee}button{background:#333;color:#fff;border:1px solid #222;padding:12px 22px;font-weight:bold;cursor:pointer}.results{display:none;text-align:center}.score{font-size:48px;font-weight:bold;margin:8px}.review{font-size:14px;text-align:left}.answer{font-weight:bold}.wrong{color:#a33}.right{color:#276b47}@media(max-width:600px){.wrap{margin:12px auto}header,.card,.results{padding:18px}}
 </style></head><body><main class="wrap"><header><h1 id="title"></h1><p>Choose the best answer for each question, then submit to see your score.</p></header><form id="quiz"></form><section class="results" id="results"><p>YOUR SCORE</p><div class="score" id="score"></div><div class="review" id="review"></div><button id="retry" type="button">Try again</button></section></main>
 <script>const data=${safeData};const quiz=document.getElementById('quiz');document.getElementById('title').textContent=data.title;data.questions.forEach((q,i)=>{const card=document.createElement('section');card.className='card';card.id='question-'+i;if(q.prompt){const heading=document.createElement('h3');heading.textContent=(i+1)+'. '+q.prompt;card.append(heading)}if(q.imageUrl){const image=document.createElement('img');image.src=q.imageUrl;image.alt='Question '+(i+1);card.append(image)}if(q.audioUrl){const audio=document.createElement('audio');audio.controls=true;audio.preload='metadata';audio.src=q.audioUrl;audio.setAttribute('aria-label','Question '+(i+1));card.append(audio)}q.choices.forEach((choice,j)=>{const label=document.createElement('label');label.className='choice';const input=document.createElement('input');input.type='radio';input.name='q'+i;input.value=String(j);input.required=q.required;label.append(input,document.createTextNode(' '+choice));card.append(label)});quiz.append(card)});const submit=document.createElement('button');submit.type='submit';submit.textContent='Grade my test';quiz.append(submit);quiz.addEventListener('submit',event=>{event.preventDefault();let correct=0;const review=document.getElementById('review');review.innerHTML='';data.questions.forEach((q,i)=>{const picked=document.querySelector('input[name=q'+i+']:checked');const answer=picked?Number(picked.value):-1;const isCorrect=answer===q.correct;if(isCorrect)correct++;const card=document.getElementById('question-'+i);card.classList.add(isCorrect?'correct':'missed');const line=document.createElement('p');line.innerHTML='<strong>Question '+(i+1)+'</strong><br><span class="'+(isCorrect?'right':'wrong')+'">'+(isCorrect?'Correct':'Your answer: '+(answer>=0?q.choices[answer]:'No answer'))+'</span>'+(isCorrect?'':'<br><span class="answer">Correct answer: '+q.choices[q.correct]+'</span>');review.append(line)});document.getElementById('score').textContent=correct+' / '+data.questions.length;quiz.style.display='none';document.getElementById('results').style.display='block';window.scrollTo({top:0,behavior:'smooth'})});document.getElementById('retry').addEventListener('click',()=>{quiz.reset();document.querySelectorAll('.card').forEach(card=>card.classList.remove('correct','missed'));quiz.style.display='block';document.getElementById('results').style.display='none';window.scrollTo({top:0,behavior:'smooth'})});</script></body></html>`;
 }
@@ -499,7 +497,6 @@ $("#imageDrop").addEventListener("drop", (event) => {
   const file = event.dataTransfer?.files[0];
   if (file?.type.startsWith("image/")) void setQuestionImage(file);
 });
-$("#helpButton").addEventListener("click", () => showToast("Create a project, choose each question title type, then download the test."));
 
 async function setQuestionImage(file: File) {
   const question = selectedQuestion();
